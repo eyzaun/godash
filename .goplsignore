@@ -1,0 +1,16 @@
+# Disable Gopls workspace module
+# go.work
+# go.work.sum
+
+# Test files
+test_*.go
+simple_server.go
+
+# Build outputs
+*.exe
+*.exe~
+
+# Cache directories
+.vscode/
+tmp/
+build/

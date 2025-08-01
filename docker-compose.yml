@@ -1,0 +1,180 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: godash-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: godash
+      POSTGRES_USER: godash
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5433:5432"
+    networks:
+      - godash-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U godash -d godash"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis (for future caching needs)
+  redis:
+    image: redis:7-alpine
+    container_name: godash-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass "redis-password"
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - godash-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # GoDash Application
+  godash:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: godash-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Database configuration
+      GODASH_DB_HOST: postgres
+      GODASH_DB_PORT: 5432  # Internal container port stays 5432
+      GODASH_DB_USER: godash
+      GODASH_DB_PASSWORD: password
+      GODASH_DB_NAME: godash
+      GODASH_DB_SSL_MODE: disable
+      
+      # Application configuration
+      GODASH_SERVER_MODE: release
+      GODASH_SERVER_PORT: 8080
+      GODASH_COLLECTION_INTERVAL: 30s
+      GODASH_RETENTION_DAYS: 30
+      GODASH_LOG_LEVEL: info
+      
+      # Metrics configuration
+      GODASH_ENABLE_CPU: "true"
+      GODASH_ENABLE_MEMORY: "true"
+      GODASH_ENABLE_DISK: "true"
+      GODASH_ENABLE_NETWORK: "true"
+      GODASH_ENABLE_PROCESSES: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - godash_logs:/var/log/godash
+      - ./configs:/app/configs:ro
+    networks:
+      - godash-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Nginx Reverse Proxy (Optional)
+  nginx:
+    image: nginx:alpine
+    container_name: godash-nginx
+    restart: unless-stopped
+    depends_on:
+      - godash
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - godash-network
+    profiles:
+      - nginx  # Only start nginx when explicitly requested
+
+  # Prometheus for metrics collection (Optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: godash-prometheus
+    restart: unless-stopped
+    depends_on:
+      - godash
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - godash-network
+    profiles:
+      - monitoring
+
+  # Grafana for dashboards (Optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: godash-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - godash-network
+    profiles:
+      - monitoring
+
+# Named volumes for data persistence
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  godash_logs:
+    driver: local
+  nginx_logs:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# Network for service communication
+networks:
+  godash-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

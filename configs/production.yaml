@@ -1,0 +1,53 @@
+# GoDash Production Configuration
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "release"  # debug, release, test
+  read_timeout: "30s"
+  write_timeout: "30s"
+  cors:
+    allow_origins: 
+      - "https://godash.yourdomain.com"
+      - "https://monitoring.yourdomain.com"
+    allow_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allow_headers: 
+      - "Content-Type"
+      - "Authorization" 
+      - "X-API-Key"
+      - "X-Request-ID"
+    expose_headers: ["X-Request-ID", "X-API-Version"]
+    allow_credentials: true
+    max_age: "24h"
+
+database:
+  host: "${GODASH_DB_HOST:postgres}"
+  port: ${GODASH_DB_PORT:5433}  # Production'da da 5433 kullan (veya environment variable)
+  user: "${GODASH_DB_USER:godash}"
+  password: "${GODASH_DB_PASSWORD:changeme}"
+  name: "${GODASH_DB_NAME:godash}"
+  ssl_mode: "${GODASH_DB_SSL_MODE:require}"
+  timezone: "UTC"
+  max_open_conns: 100
+  max_idle_conns: 10
+  conn_max_lifetime: "1h"
+  log_level: "warn"  # silent, error, warn, info
+
+metrics:
+  collection_interval: "${GODASH_COLLECTION_INTERVAL:30s}"
+  retention_days: ${GODASH_RETENTION_DAYS:30}  # Keep data for 30 days
+  batch_size: 100
+  enable_cpu: ${GODASH_ENABLE_CPU:true}
+  enable_memory: ${GODASH_ENABLE_MEMORY:true}
+  enable_disk: ${GODASH_ENABLE_DISK:true}
+  enable_network: ${GODASH_ENABLE_NETWORK:true}
+  enable_processes: ${GODASH_ENABLE_PROCESSES:true}
+
+logging:
+  level: "${GODASH_LOG_LEVEL:info}"  # debug, info, warn, error
+  format: "json"  # json, text
+  output: "stdout"  # stdout, stderr, file
+  file: "${GODASH_LOG_FILE:/var/log/godash/godash.log}"
+  max_size: 100  # megabytes
+  max_backups: 10
+  max_age: 30  # days
+  compress: true
