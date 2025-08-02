@@ -77,29 +77,31 @@ func New(cfg *config.Config) (*Database, error) {
 func (d *Database) AutoMigrate() error {
 	log.Println("Running database auto-migration...")
 
-	// Run auto-migration for all models one by one
-	log.Println("Migrating Metric model...")
+	// First, check if we need to migrate from old schema to new schema
+	if err := d.migrateFromOldSchema(); err != nil {
+		log.Printf("Warning: failed to migrate from old schema: %v", err)
+	}
+
+	// Run auto-migration for all models
+	log.Println("Migrating Metric model with extended fields...")
 	if err := d.DB.AutoMigrate(&models.Metric{}); err != nil {
 		return fmt.Errorf("failed to migrate Metric model: %w", err)
 	}
 
-	// Temporarily disabled other models to debug
-	/*
-		log.Println("Migrating DBSystemInfo model...")
-		if err := d.DB.AutoMigrate(&models.DBSystemInfo{}); err != nil {
-			return fmt.Errorf("failed to migrate DBSystemInfo model: %w", err)
-		}
+	log.Println("Migrating DBSystemInfo model...")
+	if err := d.DB.AutoMigrate(&models.DBSystemInfo{}); err != nil {
+		return fmt.Errorf("failed to migrate DBSystemInfo model: %w", err)
+	}
 
-		log.Println("Migrating Alert model...")
-		if err := d.DB.AutoMigrate(&models.Alert{}); err != nil {
-			return fmt.Errorf("failed to migrate Alert model: %w", err)
-		}
+	log.Println("Migrating Alert model...")
+	if err := d.DB.AutoMigrate(&models.Alert{}); err != nil {
+		return fmt.Errorf("failed to migrate Alert model: %w", err)
+	}
 
-		log.Println("Migrating AlertHistory model...")
-		if err := d.DB.AutoMigrate(&models.AlertHistory{}); err != nil {
-			return fmt.Errorf("failed to migrate AlertHistory model: %w", err)
-		}
-	*/
+	log.Println("Migrating AlertHistory model...")
+	if err := d.DB.AutoMigrate(&models.AlertHistory{}); err != nil {
+		return fmt.Errorf("failed to migrate AlertHistory model: %w", err)
+	}
 
 	log.Println("Database auto-migration completed successfully")
 
@@ -113,9 +115,92 @@ func (d *Database) AutoMigrate() error {
 	return nil
 }
 
+// migrateFromOldSchema migrates from old simple schema to new detailed schema
+func (d *Database) migrateFromOldSchema() error {
+	// Check if we have the old simple schema
+	var columnExists bool
+
+	// Check if cpu_cores column exists (new schema indicator)
+	err := d.DB.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'metrics' AND column_name = 'cpu_cores'
+		)
+	`).Scan(&columnExists).Error
+
+	if err != nil {
+		return fmt.Errorf("failed to check schema version: %w", err)
+	}
+
+	if columnExists {
+		log.Println("✅ Database already has new schema, skipping migration")
+		return nil
+	}
+
+	log.Println("🔄 Migrating from old schema to new detailed schema...")
+
+	// Add new columns to existing metrics table
+	alterQueries := []string{
+		// CPU detailed fields
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS cpu_cores INTEGER DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS cpu_frequency_mhz DOUBLE PRECISION DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS cpu_load_avg_1 DOUBLE PRECISION DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS cpu_load_avg_5 DOUBLE PRECISION DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS cpu_load_avg_15 DOUBLE PRECISION DEFAULT 0`,
+
+		// Memory detailed fields
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS memory_total_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS memory_used_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS memory_available_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS memory_free_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS memory_cached_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS memory_buffers_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS memory_swap_total_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS memory_swap_used_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS memory_swap_percent DOUBLE PRECISION DEFAULT 0`,
+
+		// Disk detailed fields
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_total_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_used_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_free_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_read_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_write_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_read_ops BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_write_ops BIGINT DEFAULT 0`,
+
+		// Network detailed fields
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_total_sent_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_total_recv_bytes BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_packets_sent BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_packets_recv BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_errors BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_drops BIGINT DEFAULT 0`,
+
+		// System info fields
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS platform VARCHAR(100) DEFAULT ''`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS platform_version VARCHAR(100) DEFAULT ''`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS kernel_arch VARCHAR(50) DEFAULT ''`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS uptime_seconds BIGINT DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS process_count BIGINT DEFAULT 0`,
+	}
+
+	// Execute all alter statements
+	for _, query := range alterQueries {
+		if err := d.DB.Exec(query).Error; err != nil {
+			log.Printf("Warning: failed to execute alter query: %s - %v", query, err)
+			// Continue with other queries
+		}
+	}
+
+	log.Println("✅ Schema migration completed")
+	return nil
+}
+
 // createIndexes creates additional database indexes for better performance
 func (d *Database) createIndexes() error {
-	// Composite index for metrics table (hostname + timestamp)
+	log.Println("Creating database indexes for better performance...")
+
+	// Composite index for metrics table (hostname + timestamp) - most important for queries
 	if err := d.DB.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_metrics_hostname_timestamp 
 		ON metrics (hostname, "timestamp" DESC)
@@ -123,7 +208,7 @@ func (d *Database) createIndexes() error {
 		return fmt.Errorf("failed to create hostname_timestamp index: %w", err)
 	}
 
-	// Index for time-range queries
+	// Index for time-range queries (critical for historical data)
 	if err := d.DB.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_metrics_timestamp_desc 
 		ON metrics ("timestamp" DESC)
@@ -131,12 +216,50 @@ func (d *Database) createIndexes() error {
 		return fmt.Errorf("failed to create timestamp desc index: %w", err)
 	}
 
-	// Partial index for active alerts
+	// Index for latest data queries (critical for current metrics)
+	if err := d.DB.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_metrics_id_desc 
+		ON metrics (id DESC)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create id desc index: %w", err)
+	}
+
+	// Partial index for high usage queries
+	if err := d.DB.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_metrics_high_cpu 
+		ON metrics (cpu_usage DESC) WHERE cpu_usage > 80
+	`).Error; err != nil {
+		log.Printf("Warning: failed to create high CPU index: %v", err)
+	}
+
+	if err := d.DB.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_metrics_high_memory 
+		ON metrics (memory_percent DESC) WHERE memory_percent > 80
+	`).Error; err != nil {
+		log.Printf("Warning: failed to create high memory index: %v", err)
+	}
+
+	// System info indexes
+	if err := d.DB.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_system_info_hostname 
+		ON system_info (hostname)
+	`).Error; err != nil {
+		log.Printf("Warning: failed to create system_info hostname index: %v", err)
+	}
+
+	if err := d.DB.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_system_info_last_seen 
+		ON system_info (last_seen DESC)
+	`).Error; err != nil {
+		log.Printf("Warning: failed to create system_info last_seen index: %v", err)
+	}
+
+	// Alert indexes
 	if err := d.DB.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_alerts_active 
 		ON alerts (metric_type) WHERE is_active = true
 	`).Error; err != nil {
-		return fmt.Errorf("failed to create active alerts index: %w", err)
+		log.Printf("Warning: failed to create active alerts index: %v", err)
 	}
 
 	// Index for alert history queries
@@ -144,9 +267,10 @@ func (d *Database) createIndexes() error {
 		CREATE INDEX IF NOT EXISTS idx_alert_history_hostname_created 
 		ON alert_history (hostname, created_at DESC)
 	`).Error; err != nil {
-		return fmt.Errorf("failed to create alert history index: %w", err)
+		log.Printf("Warning: failed to create alert history index: %v", err)
 	}
 
+	log.Println("✅ Database indexes created successfully")
 	return nil
 }
 
@@ -283,5 +407,23 @@ func CheckDatabaseExists(cfg *config.Config) error {
 		return fmt.Errorf("database '%s' does not exist", cfg.Database.Name)
 	}
 
+	return nil
+}
+
+// OptimizeDatabase runs database optimization commands
+func (d *Database) OptimizeDatabase() error {
+	log.Println("🔧 Running database optimization...")
+
+	// Update table statistics
+	if err := d.DB.Exec("ANALYZE metrics").Error; err != nil {
+		log.Printf("Warning: failed to analyze metrics table: %v", err)
+	}
+
+	// Vacuum tables if needed (be careful with this in production)
+	if err := d.DB.Exec("VACUUM ANALYZE metrics").Error; err != nil {
+		log.Printf("Warning: failed to vacuum metrics table: %v", err)
+	}
+
+	log.Println("✅ Database optimization completed")
 	return nil
 }

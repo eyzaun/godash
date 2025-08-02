@@ -6,13 +6,17 @@ This document provides detailed instructions for setting up GoDash System Monito
 
 ### System Requirements
 - **Operating System**: Linux, macOS, or Windows
-- **Go**: Version 1.19 or higher
+- **Go**: Version 1.19 or higher (tested with Go 1.24)
+- **PostgreSQL**: Version 12+ (or Docker)
 - **Git**: For version control
 - **Make**: For build automation (optional but recommended)
+- **Modern Browser**: For dashboard access (Chrome, Firefox, Safari, Edge)
 
 ### Hardware Requirements
 - **Minimum**: 1 CPU core, 512MB RAM, 100MB disk space
 - **Recommended**: 2+ CPU cores, 1GB+ RAM, 500MB+ disk space
+- **For Dashboard**: Additional 50MB RAM for WebSocket connections
+- **Database**: 100MB+ for metrics storage (depends on retention period)
 
 ## 🚀 Quick Start
 
@@ -47,15 +51,29 @@ go build -o build/godash-cli ./cmd/cli
 
 ### 4. Run the Application
 ```bash
+# Start PostgreSQL database (using Docker)
+docker-compose up -d postgres
+
 # Run main application
 make run
 
-# Run CLI application
-make run-cli
-
 # Or run manually
 ./build/godash
-./build/godash-cli
+
+# Access the dashboard
+open http://localhost:8081
+```
+
+### 5. Verify Installation
+```bash
+# Check API health
+curl http://localhost:8081/health
+
+# Check current metrics
+curl http://localhost:8081/api/v1/metrics/current
+
+# Test WebSocket (requires wscat: npm install -g wscat)
+wscat -c ws://localhost:8081/ws
 ```
 
 ## 🔧 Development Setup
@@ -109,6 +127,8 @@ export PATH=$PATH:$GOPATH/bin
 # For development
 export GODASH_ENV=development
 export GODASH_LOG_LEVEL=debug
+export GODASH_SERVER_PORT=8081
+export GODASH_DB_PORT=5433
 ```
 
 ### Git Hooks (Optional)
@@ -301,6 +321,46 @@ go test -v -run TestName ./path/to/package
 go tool pprof -http=:6060 ./godash
 ```
 
+## 🌐 Web Dashboard Setup
+
+### Accessing the Dashboard
+```bash
+# Start the server
+make run
+
+# Open dashboard in browser
+open http://localhost:8081
+
+# Or visit manually:
+# Windows: start http://localhost:8081
+# Linux: xdg-open http://localhost:8081
+# macOS: open http://localhost:8081
+```
+
+### Dashboard Features
+- **Real-time Metrics**: CPU, Memory, Disk usage with 500ms updates
+- **WebSocket Connection**: Live data streaming with auto-reconnection
+- **Interactive Charts**: Donut charts with Chart.js
+- **Connection Status**: Visual indicators for connectivity
+- **Responsive Design**: Works on all device sizes
+
+### WebSocket Testing
+```bash
+# Install wscat for WebSocket testing
+npm install -g wscat
+
+# Connect to WebSocket endpoint
+wscat -c ws://localhost:8081/ws
+
+# You should see real-time metric updates every 500ms
+```
+
+### Browser Compatibility
+- ✅ Chrome 90+
+- ✅ Firefox 88+
+- ✅ Safari 14+
+- ✅ Edge 90+
+
 ## 🚀 Production Deployment
 
 ### Systemd Service (Linux)
@@ -339,6 +399,9 @@ docker run -d --name godash \
 export GODASH_INTERVAL=30s
 export GODASH_LOG_LEVEL=info
 export GODASH_METRICS_ENABLED=cpu,memory,disk
+export GODASH_SERVER_PORT=8081
+export GODASH_DB_PORT=5433
+export GODASH_WEBSOCKET_ENABLED=true
 ```
 
 ## 📈 Monitoring and Logs
@@ -354,8 +417,17 @@ journalctl -u godash -f
 
 ### Health Checks
 ```bash
-# Future: HTTP health endpoint
-curl http://localhost:8080/health
+# Application health
+curl http://localhost:8081/health
+
+# Current metrics API
+curl http://localhost:8081/api/v1/metrics/current
+
+# System status
+curl http://localhost:8081/api/v1/system/status
+
+# WebSocket connection test
+wscat -c ws://localhost:8081/ws
 ```
 
 ### Metrics Export
@@ -366,14 +438,15 @@ curl http://localhost:8080/health
 
 ## 🔧 Configuration
 
-### Current Configuration (Week 1)
-- Configuration via CLI flags
-- No configuration file support (yet)
-
-### Future Configuration (Week 2+)
-- YAML configuration files
-- Environment variable support
-- Database configuration
+### Current Configuration (Production Ready)
+- ✅ YAML configuration files (config.yaml, development.yaml, production.yaml)
+- ✅ Environment variable support with fallbacks
+- ✅ Database configuration (PostgreSQL on port 5433)
+- ✅ Server configuration (HTTP on port 8081)
+- ✅ WebSocket configuration (real-time updates)
+- ✅ Metrics collection intervals (30s default)
+- ✅ CORS configuration for web dashboard
+- ✅ Logging configuration (debug/info/warn/error levels)
 
 ## 📚 Additional Resources
 

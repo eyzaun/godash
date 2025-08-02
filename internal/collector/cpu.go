@@ -5,9 +5,9 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/eyzaun/godash/internal/models"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/load"
-	"github.com/eyzaun/godash/internal/models"
 )
 
 // CPUCollector handles CPU metrics collection
@@ -38,7 +38,7 @@ func (c *CPUCollector) GetCPUMetrics() (*models.CPUMetrics, error) {
 	}
 
 	// Get CPU count
-	logicalCount, err := cpu.Counts(true)  // logical cores
+	logicalCount, err := cpu.Counts(true) // logical cores
 	if err != nil {
 		return nil, fmt.Errorf("failed to get logical CPU count: %w", err)
 	}
@@ -48,10 +48,14 @@ func (c *CPUCollector) GetCPUMetrics() (*models.CPUMetrics, error) {
 	// 	return nil, fmt.Errorf("failed to get physical CPU count: %w", err)
 	// }
 
-	// Get CPU usage percentage
-	usage, err := c.getCPUUsage()
+	// Get CPU usage percentage - use advanced method for better accuracy
+	usage, err := c.getCPUUsageAdvanced()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get CPU usage: %w", err)
+		// Fallback to simple method if advanced fails
+		usage, err = c.getCPUUsage()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get CPU usage: %w", err)
+		}
 	}
 
 	// Get per-core usage
@@ -133,7 +137,7 @@ func (c *CPUCollector) getCPUUsageAdvanced() (float64, error) {
 
 	// Calculate CPU usage between samples
 	usage := c.calculateCPUUsage(c.lastSample.cpuTimes[0], currentSample.cpuTimes[0])
-	
+
 	// Update last sample
 	c.lastSample = currentSample
 	c.sampleCount++

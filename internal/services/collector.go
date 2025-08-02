@@ -13,33 +13,29 @@ import (
 	"github.com/eyzaun/godash/internal/repository"
 )
 
-// CollectorService handles background metrics collection
+// CollectorService manages metrics collection and storage
 type CollectorService struct {
-	config         *config.Config
 	systemCollector collector.Collector
-	metricsRepo    repository.MetricsRepository
-	
-	// Service state
-	running        bool
-	mutex          sync.RWMutex
-	stopChan       chan struct{}
-	errorChan      chan error
-	
-	// Metrics collection state
-	collectionCount int64
-	lastCollection  time.Time
-	errors          []error
-	maxErrors       int
-	
-	// Batch processing
-	batchBuffer    []*models.Metric
-	batchMutex     sync.Mutex
-	batchTicker    *time.Ticker
+	metricsRepo     repository.MetricsRepository
+	config          *config.Config
+
+	// Collection state
+	isRunning   bool
+	stopChan    chan bool
+	metricsChan <-chan *models.SystemMetrics
+	ctx         context.Context
+	cancel      context.CancelFunc
+	mutex       sync.RWMutex
+
+	// Statistics
+	collectionsCount   int64
+	lastCollectionTime time.Time
+	errors             []error
 }
 
 // NewCollectorService creates a new collector service
 func NewCollectorService(cfg *config.Config, metricsRepo repository.MetricsRepository) *CollectorService {
-	// Create collector config
+	// Create collector configuration
 	collectorConfig := &collector.CollectorConfig{
 		CollectInterval: cfg.Metrics.CollectionInterval,
 		EnableCPU:       cfg.Metrics.EnableCPU,
@@ -49,315 +45,202 @@ func NewCollectorService(cfg *config.Config, metricsRepo repository.MetricsRepos
 		EnableProcesses: cfg.Metrics.EnableProcesses,
 	}
 
+	// Create system collector
 	systemCollector := collector.NewSystemCollector(collectorConfig)
 
 	return &CollectorService{
-		config:          cfg,
 		systemCollector: systemCollector,
 		metricsRepo:     metricsRepo,
-		running:         false,
-		stopChan:        make(chan struct{}),
-		errorChan:       make(chan error, 100), // Buffered error channel
-		maxErrors:       10,
-		batchBuffer:     make([]*models.Metric, 0, cfg.Metrics.BatchSize),
+		config:          cfg,
+		stopChan:        make(chan bool, 1),
+		errors:          make([]error, 0),
 	}
 }
 
-// Start begins the background metrics collection
+// GetSystemCollector returns the system collector (YENİ METOD)
+func (cs *CollectorService) GetSystemCollector() collector.Collector {
+	return cs.systemCollector
+}
+
+// Start starts the metrics collection service
 func (cs *CollectorService) Start(ctx context.Context) error {
 	cs.mutex.Lock()
-	if cs.running {
-		cs.mutex.Unlock()
+	defer cs.mutex.Unlock()
+
+	if cs.isRunning {
 		return fmt.Errorf("collector service is already running")
 	}
-	cs.running = true
-	cs.mutex.Unlock()
 
-	log.Printf("Starting metrics collection service with interval: %v", cs.config.Metrics.CollectionInterval)
+	log.Printf("🚀 Starting collector service with %v interval", cs.config.Metrics.CollectionInterval)
 
-	// Start batch processing ticker
-	cs.batchTicker = time.NewTicker(30 * time.Second) // Process batch every 30 seconds
+	// Create context for this service
+	cs.ctx, cs.cancel = context.WithCancel(ctx)
 
-	// Start collection goroutines
-	go cs.collectionWorker(ctx)
-	go cs.batchProcessor(ctx)
-	go cs.errorHandler(ctx)
-	go cs.cleanupWorker(ctx)
+	// Start metrics collection from system collector
+	cs.metricsChan = cs.systemCollector.StartCollection(cs.ctx, cs.config.Metrics.CollectionInterval)
 
-	log.Println("Metrics collection service started successfully")
+	// Start the collection processing goroutine
+	go cs.processMetrics()
+
+	// Start cleanup routine if retention is configured
+	if cs.config.Metrics.RetentionDays > 0 {
+		go cs.startCleanupRoutine()
+	}
+
+	cs.isRunning = true
+	log.Println("✅ Collector service started successfully")
+
 	return nil
 }
 
-// Stop stops the background metrics collection
+// Stop stops the metrics collection service
 func (cs *CollectorService) Stop() error {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 
-	if !cs.running {
+	if !cs.isRunning {
 		return fmt.Errorf("collector service is not running")
 	}
 
-	log.Println("Stopping metrics collection service...")
+	log.Println("🛑 Stopping collector service...")
 
-	// Signal stop to all goroutines
-	close(cs.stopChan)
-	
-	// Stop batch ticker
-	if cs.batchTicker != nil {
-		cs.batchTicker.Stop()
+	// Cancel context to stop collection
+	if cs.cancel != nil {
+		cs.cancel()
 	}
 
-	// Process any remaining metrics in buffer
-	cs.flushBatchBuffer()
+	// Send stop signal
+	select {
+	case cs.stopChan <- true:
+	default:
+		// Channel might be full or closed
+	}
 
-	cs.running = false
-	log.Println("Metrics collection service stopped")
+	cs.isRunning = false
+	log.Println("✅ Collector service stopped successfully")
+
 	return nil
 }
 
-// collectionWorker performs continuous metrics collection
-func (cs *CollectorService) collectionWorker(ctx context.Context) {
-	ticker := time.NewTicker(cs.config.Metrics.CollectionInterval)
+// processMetrics processes incoming metrics and stores them in database
+func (cs *CollectorService) processMetrics() {
+	log.Println("📊 Starting metrics processing routine...")
+
+	for {
+		select {
+		case metrics, ok := <-cs.metricsChan:
+			if !ok {
+				log.Println("📊 Metrics channel closed, stopping processing")
+				return
+			}
+
+			if err := cs.storeMetrics(metrics); err != nil {
+				cs.recordError(fmt.Errorf("failed to store metrics: %w", err))
+				log.Printf("❌ Error storing metrics: %v", err)
+			} else {
+				cs.mutex.Lock()
+				cs.collectionsCount++
+				cs.lastCollectionTime = time.Now()
+				cs.mutex.Unlock()
+
+				log.Printf("✅ Stored metrics: CPU=%.1f%%, Memory=%.1f%%, Disk=%.1f%%",
+					metrics.CPU.Usage, metrics.Memory.Percent, metrics.Disk.Percent)
+			}
+
+		case <-cs.stopChan:
+			log.Println("📊 Received stop signal, stopping metrics processing")
+			return
+
+		case <-cs.ctx.Done():
+			log.Println("📊 Context cancelled, stopping metrics processing")
+			return
+		}
+	}
+}
+
+// storeMetrics stores system metrics in the database
+func (cs *CollectorService) storeMetrics(systemMetrics *models.SystemMetrics) error {
+	if systemMetrics == nil {
+		return fmt.Errorf("received nil system metrics")
+	}
+
+	// Convert SystemMetrics to database Metric model
+	dbMetric := models.ConvertSystemMetricsToDBMetric(systemMetrics)
+
+	// Store in database
+	if err := cs.metricsRepo.Create(dbMetric); err != nil {
+		return fmt.Errorf("failed to create metric record: %w", err)
+	}
+
+	return nil
+}
+
+// startCleanupRoutine starts the periodic cleanup of old metrics
+func (cs *CollectorService) startCleanupRoutine() {
+	// Run cleanup every 24 hours
+	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
-	// Collect initial metrics immediately
-	cs.collectAndStore()
+	log.Printf("🧹 Starting cleanup routine: will delete metrics older than %d days", cs.config.Metrics.RetentionDays)
 
 	for {
 		select {
 		case <-ticker.C:
-			cs.collectAndStore()
-		case <-cs.stopChan:
-			log.Println("Collection worker stopped")
-			return
-		case <-ctx.Done():
-			log.Println("Collection worker stopped due to context cancellation")
-			return
-		}
-	}
-}
+			if err := cs.cleanupOldMetrics(); err != nil {
+				cs.recordError(fmt.Errorf("cleanup failed: %w", err))
+				log.Printf("❌ Error during metrics cleanup: %v", err)
+			}
 
-// collectAndStore collects metrics and adds them to batch buffer
-func (cs *CollectorService) collectAndStore() {
-	defer func() {
-		if r := recover(); r != nil {
-			err := fmt.Errorf("panic in collectAndStore: %v", r)
-			cs.addError(err)
-			log.Printf("Error: %v", err)
-		}
-	}()
-
-	// Collect system metrics
-	systemMetrics, err := cs.systemCollector.GetSystemMetrics()
-	if err != nil {
-		cs.addError(fmt.Errorf("failed to collect system metrics: %w", err))
-		return
-	}
-
-	// Convert to database model
-	metric := models.ConvertSystemMetricsToDBMetric(systemMetrics)
-
-	// Add to batch buffer
-	cs.addToBatch(metric)
-
-	// Update collection stats
-	cs.mutex.Lock()
-	cs.collectionCount++
-	cs.lastCollection = time.Now()
-	cs.mutex.Unlock()
-
-	// Log successful collection (less frequently)
-	if cs.collectionCount%10 == 0 {
-		log.Printf("Collected %d metrics so far. Latest: CPU=%.1f%%, Memory=%.1f%%, Disk=%.1f%%",
-			cs.collectionCount,
-			systemMetrics.CPU.Usage,
-			systemMetrics.Memory.Percent,
-			systemMetrics.Disk.Percent,
-		)
-	}
-}
-
-// addToBatch adds a metric to the batch buffer
-func (cs *CollectorService) addToBatch(metric *models.Metric) {
-	cs.batchMutex.Lock()
-	defer cs.batchMutex.Unlock()
-
-	cs.batchBuffer = append(cs.batchBuffer, metric)
-
-	// If batch is full, trigger immediate processing
-	if len(cs.batchBuffer) >= cs.config.Metrics.BatchSize {
-		go cs.processBatch()
-	}
-}
-
-// batchProcessor processes batches at regular intervals
-func (cs *CollectorService) batchProcessor(ctx context.Context) {
-	for {
-		select {
-		case <-cs.batchTicker.C:
-			cs.processBatch()
-		case <-cs.stopChan:
-			log.Println("Batch processor stopped")
-			return
-		case <-ctx.Done():
-			log.Println("Batch processor stopped due to context cancellation")
+		case <-cs.ctx.Done():
+			log.Println("🧹 Context cancelled, stopping cleanup routine")
 			return
 		}
 	}
 }
 
-// processBatch processes the current batch of metrics
-func (cs *CollectorService) processBatch() {
-	cs.batchMutex.Lock()
-	if len(cs.batchBuffer) == 0 {
-		cs.batchMutex.Unlock()
-		return
-	}
-
-	// Get current batch and reset buffer
-	batch := make([]*models.Metric, len(cs.batchBuffer))
-	copy(batch, cs.batchBuffer)
-	cs.batchBuffer = cs.batchBuffer[:0] // Reset slice
-	cs.batchMutex.Unlock()
-
-	// Process batch
-	start := time.Now()
-	if err := cs.metricsRepo.CreateBatch(batch); err != nil {
-		cs.addError(fmt.Errorf("failed to save batch of %d metrics: %w", len(batch), err))
-		log.Printf("Error saving batch: %v", err)
-		return
-	}
-
-	duration := time.Since(start)
-	log.Printf("Successfully saved batch of %d metrics in %v", len(batch), duration)
-}
-
-// flushBatchBuffer processes any remaining metrics in the buffer
-func (cs *CollectorService) flushBatchBuffer() {
-	cs.batchMutex.Lock()
-	defer cs.batchMutex.Unlock()
-
-	if len(cs.batchBuffer) == 0 {
-		return
-	}
-
-	log.Printf("Flushing remaining %d metrics from buffer", len(cs.batchBuffer))
-	
-	if err := cs.metricsRepo.CreateBatch(cs.batchBuffer); err != nil {
-		log.Printf("Error flushing batch buffer: %v", err)
-	}
-
-	cs.batchBuffer = cs.batchBuffer[:0]
-}
-
-// errorHandler manages error reporting and recovery
-func (cs *CollectorService) errorHandler(ctx context.Context) {
-	for {
-		select {
-		case err := <-cs.errorChan:
-			log.Printf("Collection error: %v", err)
-			
-			// In production, you might want to:
-			// - Send errors to monitoring system
-			// - Implement exponential backoff
-			// - Send alerts for critical errors
-			
-		case <-cs.stopChan:
-			log.Println("Error handler stopped")
-			return
-		case <-ctx.Done():
-			log.Println("Error handler stopped due to context cancellation")
-			return
-		}
-	}
-}
-
-// cleanupWorker periodically cleans up old metrics
-func (cs *CollectorService) cleanupWorker(ctx context.Context) {
-	// Run cleanup every 6 hours
-	ticker := time.NewTicker(6 * time.Hour)
-	defer ticker.Stop()
-
-	// Run initial cleanup after 1 hour
-	initialTimer := time.NewTimer(1 * time.Hour)
-	defer initialTimer.Stop()
-
-	for {
-		select {
-		case <-initialTimer.C:
-			cs.performCleanup()
-		case <-ticker.C:
-			cs.performCleanup()
-		case <-cs.stopChan:
-			log.Println("Cleanup worker stopped")
-			return
-		case <-ctx.Done():
-			log.Println("Cleanup worker stopped due to context cancellation")
-			return
-		}
-	}
-}
-
-// performCleanup removes old metrics based on retention policy
-func (cs *CollectorService) performCleanup() {
-	if cs.config.Metrics.RetentionDays <= 0 {
-		return
-	}
-
+// cleanupOldMetrics removes metrics older than the retention period
+func (cs *CollectorService) cleanupOldMetrics() error {
 	cutoffTime := time.Now().AddDate(0, 0, -cs.config.Metrics.RetentionDays)
-	
-	log.Printf("Starting cleanup of metrics older than %d days (%v)", 
-		cs.config.Metrics.RetentionDays, cutoffTime)
 
 	deletedCount, err := cs.metricsRepo.DeleteOldRecords(cutoffTime)
 	if err != nil {
-		cs.addError(fmt.Errorf("cleanup failed: %w", err))
-		return
+		return fmt.Errorf("failed to delete old records: %w", err)
 	}
 
 	if deletedCount > 0 {
-		log.Printf("Cleanup completed: removed %d old metric records", deletedCount)
+		log.Printf("🧹 Cleaned up %d old metric records older than %d days", deletedCount, cs.config.Metrics.RetentionDays)
 	} else {
-		log.Println("Cleanup completed: no old records to remove")
+		log.Printf("🧹 No old metrics to clean up (retention: %d days)", cs.config.Metrics.RetentionDays)
 	}
+
+	return nil
 }
 
-// addError adds an error to the error tracking
-func (cs *CollectorService) addError(err error) {
+// recordError records an error for statistics
+func (cs *CollectorService) recordError(err error) {
 	cs.mutex.Lock()
 	defer cs.mutex.Unlock()
 
 	cs.errors = append(cs.errors, err)
 
-	// Keep only the last maxErrors
-	if len(cs.errors) > cs.maxErrors {
-		cs.errors = cs.errors[len(cs.errors)-cs.maxErrors:]
-	}
-
-	// Send to error channel (non-blocking)
-	select {
-	case cs.errorChan <- err:
-	default:
-		// Channel is full, skip this error
+	// Keep only last 10 errors
+	if len(cs.errors) > 10 {
+		cs.errors = cs.errors[len(cs.errors)-10:]
 	}
 }
 
-// GetStats returns collection service statistics
+// GetStats returns service statistics
 func (cs *CollectorService) GetStats() map[string]interface{} {
 	cs.mutex.RLock()
 	defer cs.mutex.RUnlock()
 
-	cs.batchMutex.Lock()
-	batchSize := len(cs.batchBuffer)
-	cs.batchMutex.Unlock()
-
 	return map[string]interface{}{
-		"running":            cs.running,
-		"collection_count":   cs.collectionCount,
-		"last_collection":    cs.lastCollection,
-		"collection_interval": cs.config.Metrics.CollectionInterval,
-		"batch_size":         batchSize,
-		"error_count":        len(cs.errors),
+		"is_running":           cs.isRunning,
+		"collections_count":    cs.collectionsCount,
+		"last_collection_time": cs.lastCollectionTime,
+		"error_count":          len(cs.errors),
+		"collection_interval":  cs.config.Metrics.CollectionInterval,
+		"retention_days":       cs.config.Metrics.RetentionDays,
 		"enabled_metrics": map[string]bool{
 			"cpu":       cs.config.Metrics.EnableCPU,
 			"memory":    cs.config.Metrics.EnableMemory,
@@ -368,15 +251,14 @@ func (cs *CollectorService) GetStats() map[string]interface{} {
 	}
 }
 
-// GetLastErrors returns the most recent errors
-func (cs *CollectorService) GetLastErrors() []string {
+// GetLastErrors returns the last recorded errors
+func (cs *CollectorService) GetLastErrors() []error {
 	cs.mutex.RLock()
 	defer cs.mutex.RUnlock()
 
-	errors := make([]string, len(cs.errors))
-	for i, err := range cs.errors {
-		errors[i] = err.Error()
-	}
+	// Return a copy of the errors slice
+	errors := make([]error, len(cs.errors))
+	copy(errors, cs.errors)
 	return errors
 }
 
@@ -384,63 +266,89 @@ func (cs *CollectorService) GetLastErrors() []string {
 func (cs *CollectorService) IsRunning() bool {
 	cs.mutex.RLock()
 	defer cs.mutex.RUnlock()
-	return cs.running
-}
-
-// GetCollectionCount returns the total number of metrics collected
-func (cs *CollectorService) GetCollectionCount() int64 {
-	cs.mutex.RLock()
-	defer cs.mutex.RUnlock()
-	return cs.collectionCount
-}
-
-// GetLastCollection returns the timestamp of the last collection
-func (cs *CollectorService) GetLastCollection() time.Time {
-	cs.mutex.RLock()
-	defer cs.mutex.RUnlock()
-	return cs.lastCollection
+	return cs.isRunning
 }
 
 // ForceCollection triggers an immediate metrics collection
-func (cs *CollectorService) ForceCollection() error {
-	if !cs.IsRunning() {
-		return fmt.Errorf("collector service is not running")
+func (cs *CollectorService) ForceCollection() (*models.SystemMetrics, error) {
+	if cs.systemCollector == nil {
+		return nil, fmt.Errorf("system collector is not available")
 	}
 
-	go cs.collectAndStore()
-	return nil
+	metrics, err := cs.systemCollector.GetSystemMetrics()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get system metrics: %w", err)
+	}
+
+	// Store the metrics
+	if err := cs.storeMetrics(metrics); err != nil {
+		// Log error but still return the metrics
+		log.Printf("❌ Warning: failed to store forced collection metrics: %v", err)
+	}
+
+	return metrics, nil
 }
 
-// ForceBatchProcess triggers immediate batch processing
-func (cs *CollectorService) ForceBatchProcess() error {
-	if !cs.IsRunning() {
-		return fmt.Errorf("collector service is not running")
+// GetCurrentMetrics returns current system metrics without storing them
+func (cs *CollectorService) GetCurrentMetrics() (*models.SystemMetrics, error) {
+	if cs.systemCollector == nil {
+		return nil, fmt.Errorf("system collector is not available")
 	}
 
-	go cs.processBatch()
-	return nil
+	return cs.systemCollector.GetSystemMetrics()
 }
 
-// UpdateConfig updates the service configuration
-func (cs *CollectorService) UpdateConfig(newConfig *config.Config) error {
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
-
-	// Update config
-	cs.config = newConfig
-
-	// Update system collector configuration
-	collectorConfig := &collector.CollectorConfig{
-		CollectInterval: newConfig.Metrics.CollectionInterval,
-		EnableCPU:       newConfig.Metrics.EnableCPU,
-		EnableMemory:    newConfig.Metrics.EnableMemory,
-		EnableDisk:      newConfig.Metrics.EnableDisk,
-		EnableNetwork:   newConfig.Metrics.EnableNetwork,
-		EnableProcesses: newConfig.Metrics.EnableProcesses,
+// GetSystemInfo returns current system information
+func (cs *CollectorService) GetSystemInfo() (*models.SystemInfo, error) {
+	if cs.systemCollector == nil {
+		return nil, fmt.Errorf("system collector is not available")
 	}
 
-	cs.systemCollector = collector.NewSystemCollector(collectorConfig)
+	return cs.systemCollector.GetSystemInfo()
+}
 
-	log.Println("Collector service configuration updated")
-	return nil
+// HealthCheck checks if the collector service is healthy
+func (cs *CollectorService) HealthCheck() (bool, []string, error) {
+	cs.mutex.RLock()
+	defer cs.mutex.RUnlock()
+
+	issues := []string{}
+	healthy := true
+
+	// Check if service is running
+	if !cs.isRunning {
+		healthy = false
+		issues = append(issues, "Collector service is not running")
+	}
+
+	// Check if recent collection happened
+	if cs.isRunning && !cs.lastCollectionTime.IsZero() {
+		timeSinceLastCollection := time.Since(cs.lastCollectionTime)
+		maxExpectedInterval := cs.config.Metrics.CollectionInterval * 3
+
+		if timeSinceLastCollection > maxExpectedInterval {
+			healthy = false
+			issues = append(issues, fmt.Sprintf("No metrics collected for %v", timeSinceLastCollection))
+		}
+	}
+
+	// Check error count
+	if len(cs.errors) > 5 {
+		healthy = false
+		issues = append(issues, fmt.Sprintf("High error count: %d recent errors", len(cs.errors)))
+	}
+
+	// Check system collector health if available
+	if cs.systemCollector != nil {
+		systemHealthy, systemIssues, err := cs.systemCollector.IsHealthy()
+		if err != nil {
+			healthy = false
+			issues = append(issues, fmt.Sprintf("System collector health check failed: %v", err))
+		} else if !systemHealthy {
+			healthy = false
+			issues = append(issues, systemIssues...)
+		}
+	}
+
+	return healthy, issues, nil
 }

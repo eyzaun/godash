@@ -90,7 +90,18 @@ func SecurityHeaders() gin.HandlerFunc {
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("X-XSS-Protection", "1; mode=block")
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
-		c.Header("Content-Security-Policy", "default-src 'self'")
+
+		// Updated CSP to allow external CDNs and inline styles/scripts for dashboard
+		csp := "default-src 'self'; " +
+			"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " +
+			"style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; " +
+			"font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; " +
+			"img-src 'self' data: blob:; " +
+			"connect-src 'self' ws: wss:; " +
+			"object-src 'none'; " +
+			"base-uri 'self'"
+
+		c.Header("Content-Security-Policy", csp)
 
 		// Only add HSTS for HTTPS
 		if c.Request.TLS != nil {

@@ -1,7 +1,10 @@
 package api
 
 import (
+	"context"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -10,35 +13,41 @@ import (
 	"github.com/eyzaun/godash/internal/api/middleware"
 	"github.com/eyzaun/godash/internal/config"
 	"github.com/eyzaun/godash/internal/repository"
+	"github.com/eyzaun/godash/internal/services"
 )
 
 // Router wraps gin router with dependencies
 type Router struct {
-	engine         *gin.Engine
-	config         *config.Config
-	metricsRepo    repository.MetricsRepository
-	metricsHandler *handlers.MetricsHandler
-	healthHandler  *handlers.HealthHandler
+	engine           *gin.Engine
+	config           *config.Config
+	metricsRepo      repository.MetricsRepository
+	collectorService *services.CollectorService
+	metricsHandler   *handlers.MetricsHandler
+	healthHandler    *handlers.HealthHandler
+	websocketHandler *handlers.WebSocketHandler
 }
 
 // New creates a new API router
-func New(cfg *config.Config, metricsRepo repository.MetricsRepository) *Router {
+func New(cfg *config.Config, metricsRepo repository.MetricsRepository, collectorService *services.CollectorService) *Router {
 	// Set gin mode
 	gin.SetMode(cfg.Server.Mode)
 
 	// Create gin engine
 	engine := gin.New()
 
-	// Create handlers
-	metricsHandler := handlers.NewMetricsHandler(metricsRepo)
+	// Create handlers with system collector support
+	metricsHandler := handlers.NewMetricsHandler(metricsRepo, collectorService.GetSystemCollector())
 	healthHandler := handlers.NewHealthHandler(metricsRepo)
+	websocketHandler := handlers.NewWebSocketHandler(metricsRepo, collectorService.GetSystemCollector())
 
 	router := &Router{
-		engine:         engine,
-		config:         cfg,
-		metricsRepo:    metricsRepo,
-		metricsHandler: metricsHandler,
-		healthHandler:  healthHandler,
+		engine:           engine,
+		config:           cfg,
+		metricsRepo:      metricsRepo,
+		collectorService: collectorService,
+		metricsHandler:   metricsHandler,
+		healthHandler:    healthHandler,
+		websocketHandler: websocketHandler,
 	}
 
 	// Setup middleware
@@ -46,6 +55,9 @@ func New(cfg *config.Config, metricsRepo repository.MetricsRepository) *Router {
 
 	// Setup routes
 	router.setupRoutes()
+
+	// Start WebSocket metrics broadcasting
+	go router.startWebSocketBroadcasting()
 
 	return router
 }
@@ -90,6 +102,18 @@ func (r *Router) setupRoutes() {
 	r.engine.GET("/ready", r.healthHandler.ReadinessCheck)
 	r.engine.GET("/metrics", r.healthHandler.PrometheusMetrics) // For monitoring tools
 
+	// WebSocket endpoint for real-time metrics
+	r.engine.GET("/ws", r.websocketHandler.HandleWebSocket)
+
+	// WebSocket stats endpoint
+	r.engine.GET("/ws/stats", func(c *gin.Context) {
+		stats := r.websocketHandler.GetClientStats()
+		c.JSON(http.StatusOK, handlers.APIResponse{
+			Success: true,
+			Data:    stats,
+		})
+	})
+
 	// API v1 routes
 	v1 := r.engine.Group("/api/v1")
 	{
@@ -104,6 +128,7 @@ func (r *Router) setupRoutes() {
 			metricsGroup.GET("/average/:hostname", r.metricsHandler.GetAverageMetricsByHostname)
 			metricsGroup.GET("/summary", r.metricsHandler.GetMetricsSummary)
 			metricsGroup.GET("/trends/:hostname", r.metricsHandler.GetUsageTrends)
+			metricsGroup.GET("/trends", r.metricsHandler.GetHistoricalTrends) // YENİ ENDPOINT
 			metricsGroup.GET("/top/:type", r.metricsHandler.GetTopHostsByUsage)
 			metricsGroup.POST("", r.metricsHandler.CreateMetric) // For manual metric insertion
 		}
@@ -114,6 +139,28 @@ func (r *Router) setupRoutes() {
 			systemGroup.GET("/status", r.metricsHandler.GetSystemStatus)
 			systemGroup.GET("/hosts", r.metricsHandler.GetHosts)
 			systemGroup.GET("/stats", r.metricsHandler.GetStats)
+		}
+
+		// WebSocket routes
+		wsGroup := v1.Group("/ws")
+		{
+			wsGroup.GET("/clients", func(c *gin.Context) {
+				count := r.websocketHandler.GetConnectedClients()
+				c.JSON(http.StatusOK, handlers.APIResponse{
+					Success: true,
+					Data: map[string]interface{}{
+						"connected_clients": count,
+					},
+				})
+			})
+
+			wsGroup.GET("/stats", func(c *gin.Context) {
+				stats := r.websocketHandler.GetClientStats()
+				c.JSON(http.StatusOK, handlers.APIResponse{
+					Success: true,
+					Data:    stats,
+				})
+			})
 		}
 
 		// Admin routes (protected)
@@ -129,9 +176,24 @@ func (r *Router) setupRoutes() {
 		}
 	}
 
-	// Static file serving (for future web interface)
+	// Static file serving (for web interface)
 	r.engine.Static("/static", "./web/static")
 	r.engine.LoadHTMLGlob("web/templates/*")
+
+	// Dashboard routes
+	r.engine.GET("/", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "dashboard.html", gin.H{
+			"title":   "GoDash System Monitor",
+			"version": "1.0.0",
+		})
+	})
+
+	r.engine.GET("/dashboard", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "dashboard.html", gin.H{
+			"title":   "GoDash System Monitor",
+			"version": "1.0.0",
+		})
+	})
 
 	// Catch-all route for SPA (Single Page Application)
 	r.engine.NoRoute(func(c *gin.Context) {
@@ -145,16 +207,56 @@ func (r *Router) setupRoutes() {
 			return
 		}
 
-		// For non-API routes, serve index.html (for SPA)
-		c.HTML(http.StatusOK, "index.html", gin.H{
-			"title": "GoDash System Monitor",
+		// If it's a WebSocket route, return 404
+		if len(c.Request.URL.Path) >= 3 && c.Request.URL.Path[:3] == "/ws" {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":   "Not Found",
+				"message": "WebSocket endpoint not found",
+				"path":    c.Request.URL.Path,
+			})
+			return
+		}
+
+		// For non-API routes, serve dashboard (SPA)
+		c.HTML(http.StatusOK, "dashboard.html", gin.H{
+			"title":   "GoDash System Monitor",
+			"version": "1.0.0",
 		})
 	})
+}
+
+// startWebSocketBroadcasting starts the WebSocket metrics broadcasting goroutine
+func (r *Router) startWebSocketBroadcasting() {
+	log.Println("🚀 Starting ultra-fast WebSocket broadcasting...")
+
+	// Start metrics broadcasting every 500ms for ultra real-time updates
+	ctx := context.Background()
+	interval := 500 * time.Millisecond // 500ms for ultra-responsive feel
+
+	// Use a separate goroutine for broadcasting
+	go r.websocketHandler.StartMetricsBroadcast(ctx, interval)
+
+	// Start system status broadcasting every 30 seconds
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			r.websocketHandler.BroadcastSystemStatus()
+		}
+	}()
+
+	log.Printf("✅ WebSocket broadcasting started with %v interval", interval)
 }
 
 // GetEngine returns the gin engine
 func (r *Router) GetEngine() *gin.Engine {
 	return r.engine
+}
+
+// GetWebSocketHandler returns the WebSocket handler
+func (r *Router) GetWebSocketHandler() *handlers.WebSocketHandler {
+	return r.websocketHandler
 }
 
 // Start starts the HTTP server

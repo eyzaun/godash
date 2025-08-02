@@ -7,19 +7,22 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/eyzaun/godash/internal/collector"
 	"github.com/eyzaun/godash/internal/models"
 	"github.com/eyzaun/godash/internal/repository"
 )
 
 // MetricsHandler handles HTTP requests for metrics
 type MetricsHandler struct {
-	metricsRepo repository.MetricsRepository
+	metricsRepo     repository.MetricsRepository
+	systemCollector collector.Collector
 }
 
 // NewMetricsHandler creates a new metrics handler
-func NewMetricsHandler(metricsRepo repository.MetricsRepository) *MetricsHandler {
+func NewMetricsHandler(metricsRepo repository.MetricsRepository, systemCollector collector.Collector) *MetricsHandler {
 	return &MetricsHandler{
-		metricsRepo: metricsRepo,
+		metricsRepo:     metricsRepo,
+		systemCollector: systemCollector,
 	}
 }
 
@@ -47,17 +50,48 @@ type Pagination struct {
 	TotalPages int   `json:"total_pages"`
 }
 
-// GetCurrentMetrics gets the latest metrics from all hosts
+// DetailedMetricsResponse - REAL-TIME VERİ İÇİN YENİ RESPONSE FORMAT
+type DetailedMetricsResponse struct {
+	// Basic fields (frontend'in beklediği format)
+	CPUUsage      float64 `json:"cpu_usage"`
+	MemoryPercent float64 `json:"memory_percent"`
+	DiskPercent   float64 `json:"disk_percent"`
+	Hostname      string  `json:"hostname"`
+	Timestamp     string  `json:"timestamp"`
+
+	// Detailed CPU info
+	CPUCores     int       `json:"cpu_cores"`
+	CPUFrequency float64   `json:"cpu_frequency"`
+	CPULoadAvg   []float64 `json:"cpu_load_avg"`
+
+	// Detailed Memory info
+	MemoryTotal     uint64 `json:"memory_total"`
+	MemoryUsed      uint64 `json:"memory_used"`
+	MemoryAvailable uint64 `json:"memory_available"`
+	MemoryFree      uint64 `json:"memory_free"`
+
+	// Detailed Disk info
+	DiskTotal uint64 `json:"disk_total"`
+	DiskUsed  uint64 `json:"disk_used"`
+	DiskFree  uint64 `json:"disk_free"`
+
+	// Network info
+	NetworkSent     uint64 `json:"network_sent"`
+	NetworkReceived uint64 `json:"network_received"`
+}
+
+// GetCurrentMetrics gets the latest metrics from system collector (REAL-TIME)
 // @Summary Get current metrics
-// @Description Retrieve the latest system metrics from all monitored hosts
+// @Description Retrieve the latest system metrics directly from system collector for real-time data
 // @Tags metrics
 // @Accept json
 // @Produce json
-// @Success 200 {object} APIResponse{data=[]models.Metric}
+// @Success 200 {object} APIResponse{data=DetailedMetricsResponse}
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/metrics/current [get]
 func (h *MetricsHandler) GetCurrentMetrics(c *gin.Context) {
-	metrics, err := h.metricsRepo.GetLatest()
+	// REAL-TIME VERİ: SystemCollector'dan direkt al
+	systemMetrics, err := h.systemCollector.GetSystemMetrics()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, APIResponse{
 			Success: false,
@@ -67,9 +101,39 @@ func (h *MetricsHandler) GetCurrentMetrics(c *gin.Context) {
 		return
 	}
 
+	// Frontend'in beklediği format'a dönüştür
+	response := DetailedMetricsResponse{
+		// Basic metrics (frontend'in chart'ları için)
+		CPUUsage:      systemMetrics.CPU.Usage,
+		MemoryPercent: systemMetrics.Memory.Percent,
+		DiskPercent:   systemMetrics.Disk.Percent,
+		Hostname:      systemMetrics.Hostname,
+		Timestamp:     systemMetrics.Timestamp.Format(time.RFC3339),
+
+		// Detailed CPU info
+		CPUCores:     systemMetrics.CPU.Cores,
+		CPUFrequency: systemMetrics.CPU.Frequency,
+		CPULoadAvg:   systemMetrics.CPU.LoadAvg,
+
+		// Detailed Memory info
+		MemoryTotal:     systemMetrics.Memory.Total,
+		MemoryUsed:      systemMetrics.Memory.Used,
+		MemoryAvailable: systemMetrics.Memory.Available,
+		MemoryFree:      systemMetrics.Memory.Free,
+
+		// Detailed Disk info
+		DiskTotal: systemMetrics.Disk.Total,
+		DiskUsed:  systemMetrics.Disk.Used,
+		DiskFree:  systemMetrics.Disk.Free,
+
+		// Network info
+		NetworkSent:     systemMetrics.Network.TotalSent,
+		NetworkReceived: systemMetrics.Network.TotalReceived,
+	}
+
 	c.JSON(http.StatusOK, APIResponse{
 		Success: true,
-		Data:    metrics,
+		Data:    response,
 	})
 }
 
@@ -86,14 +150,14 @@ func (h *MetricsHandler) GetCurrentMetrics(c *gin.Context) {
 // @Router /api/v1/metrics/current/{hostname} [get]
 func (h *MetricsHandler) GetCurrentMetricsByHostname(c *gin.Context) {
 	hostname := c.Param("hostname")
-	
+
 	metrics, err := h.metricsRepo.GetLatestByHostname(hostname)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		if err.Error() == "no metrics found for hostname "+hostname {
 			statusCode = http.StatusNotFound
 		}
-		
+
 		c.JSON(statusCode, APIResponse{
 			Success: false,
 			Error:   "Failed to retrieve metrics for hostname",
@@ -160,7 +224,7 @@ func (h *MetricsHandler) GetMetricsHistory(c *gin.Context) {
 	// Parse pagination parameters
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	
+
 	if limit <= 0 || limit > 1000 {
 		limit = 50
 	}
@@ -201,6 +265,110 @@ func (h *MetricsHandler) GetMetricsHistory(c *gin.Context) {
 	})
 }
 
+// YENİ ENDPOINT: GetHistoricalTrends - Frontend'in beklediği trends data
+// @Summary Get historical trends for charts
+// @Description Get historical trends data formatted for frontend charts
+// @Tags metrics
+// @Accept json
+// @Produce json
+// @Param range query string false "Time range (1h, 6h, 24h, 7d)" default("1h")
+// @Success 200 {object} APIResponse
+// @Failure 400 {object} APIResponse
+// @Failure 500 {object} APIResponse
+// @Router /api/v1/metrics/trends [get]
+func (h *MetricsHandler) GetHistoricalTrends(c *gin.Context) {
+	timeRange := c.DefaultQuery("range", "1h")
+
+	var duration time.Duration
+	var err error
+
+	switch timeRange {
+	case "1h":
+		duration = 1 * time.Hour
+	case "6h":
+		duration = 6 * time.Hour
+	case "24h":
+		duration = 24 * time.Hour
+	case "7d":
+		duration = 7 * 24 * time.Hour
+	default:
+		duration, err = time.ParseDuration(timeRange)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Error:   "Invalid time range",
+				Message: "Use format like '1h', '6h', '24h', '7d' or duration format",
+			})
+			return
+		}
+	}
+
+	from := time.Now().Add(-duration)
+	to := time.Now()
+
+	// Get historical data with reasonable limit
+	limit := 100 // Enough points for smooth chart
+	metrics, err := h.metricsRepo.GetHistory(from, to, limit, 0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Failed to retrieve historical trends",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// Transform data for frontend charts
+	var labels []string
+	var cpuData []float64
+	var memoryData []float64
+	var diskData []float64
+
+	for _, metric := range metrics {
+		labels = append(labels, metric.Timestamp.Format("15:04:05"))
+		cpuData = append(cpuData, metric.CPUUsage)
+		memoryData = append(memoryData, metric.MemoryPercent)
+		diskData = append(diskData, metric.DiskPercent)
+	}
+
+	// Reverse arrays to show chronological order
+	for i, j := 0, len(labels)-1; i < j; i, j = i+1, j-1 {
+		labels[i], labels[j] = labels[j], labels[i]
+		cpuData[i], cpuData[j] = cpuData[j], cpuData[i]
+		memoryData[i], memoryData[j] = memoryData[j], memoryData[i]
+		diskData[i], diskData[j] = diskData[j], diskData[i]
+	}
+
+	trendsData := map[string]interface{}{
+		"labels": labels,
+		"datasets": []map[string]interface{}{
+			{
+				"label":           "CPU Usage %",
+				"data":            cpuData,
+				"borderColor":     "#ff6b6b",
+				"backgroundColor": "rgba(255, 107, 107, 0.1)",
+			},
+			{
+				"label":           "Memory Usage %",
+				"data":            memoryData,
+				"borderColor":     "#4ecdc4",
+				"backgroundColor": "rgba(78, 205, 196, 0.1)",
+			},
+			{
+				"label":           "Disk Usage %",
+				"data":            diskData,
+				"borderColor":     "#ffa726",
+				"backgroundColor": "rgba(255, 167, 38, 0.1)",
+			},
+		},
+	}
+
+	c.JSON(http.StatusOK, APIResponse{
+		Success: true,
+		Data:    trendsData,
+	})
+}
+
 // GetMetricsHistoryByHostname gets historical metrics for a specific hostname
 // @Summary Get metrics history by hostname
 // @Description Retrieve historical system metrics for a specific host
@@ -218,7 +386,7 @@ func (h *MetricsHandler) GetMetricsHistory(c *gin.Context) {
 // @Router /api/v1/metrics/history/{hostname} [get]
 func (h *MetricsHandler) GetMetricsHistoryByHostname(c *gin.Context) {
 	hostname := c.Param("hostname")
-	
+
 	// Parse query parameters (same logic as GetMetricsHistory)
 	var from, to time.Time
 	var err error
@@ -253,7 +421,7 @@ func (h *MetricsHandler) GetMetricsHistoryByHostname(c *gin.Context) {
 
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	
+
 	if limit <= 0 || limit > 1000 {
 		limit = 50
 	}
@@ -304,7 +472,7 @@ func (h *MetricsHandler) GetMetricsHistoryByHostname(c *gin.Context) {
 // @Router /api/v1/metrics/average [get]
 func (h *MetricsHandler) GetAverageMetrics(c *gin.Context) {
 	durationStr := c.DefaultQuery("duration", "1h")
-	
+
 	duration, err := time.ParseDuration(durationStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, APIResponse{
@@ -346,7 +514,7 @@ func (h *MetricsHandler) GetAverageMetrics(c *gin.Context) {
 func (h *MetricsHandler) GetAverageMetricsByHostname(c *gin.Context) {
 	hostname := c.Param("hostname")
 	durationStr := c.DefaultQuery("duration", "1h")
-	
+
 	duration, err := time.ParseDuration(durationStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, APIResponse{
@@ -446,7 +614,7 @@ func (h *MetricsHandler) GetMetricsSummary(c *gin.Context) {
 func (h *MetricsHandler) GetUsageTrends(c *gin.Context) {
 	hostname := c.Param("hostname")
 	hours, _ := strconv.Atoi(c.DefaultQuery("hours", "24"))
-	
+
 	if hours <= 0 || hours > 168 { // Max 1 week
 		hours = 24
 	}
@@ -482,7 +650,7 @@ func (h *MetricsHandler) GetUsageTrends(c *gin.Context) {
 func (h *MetricsHandler) GetTopHostsByUsage(c *gin.Context) {
 	metricType := c.Param("type")
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
-	
+
 	if limit <= 0 || limit > 100 {
 		limit = 10
 	}
@@ -525,7 +693,7 @@ func (h *MetricsHandler) GetTopHostsByUsage(c *gin.Context) {
 // @Router /api/v1/metrics [post]
 func (h *MetricsHandler) CreateMetric(c *gin.Context) {
 	var metric models.Metric
-	
+
 	if err := c.ShouldBindJSON(&metric); err != nil {
 		c.JSON(http.StatusBadRequest, APIResponse{
 			Success: false,
@@ -615,7 +783,7 @@ func (h *MetricsHandler) GetHosts(c *gin.Context) {
 	})
 }
 
-// GetStats gets database statistics
+// GetStats gets database statistics (DÜZELTİLMİŞ VERSİYON)
 // @Summary Get statistics
 // @Description Get database and metrics statistics
 // @Tags system
@@ -635,9 +803,38 @@ func (h *MetricsHandler) GetStats(c *gin.Context) {
 		return
 	}
 
+	// Get system status to count hosts
+	systemStatus, err := h.metricsRepo.GetSystemStatus()
+	totalHosts := 1 // Default to 1 for single host setup
+	if err == nil && len(systemStatus) > 0 {
+		totalHosts = len(systemStatus)
+	}
+
+	// Get average metrics for last hour - DÜZELTİLMİŞ VERSİYON
+	averageMetrics, err := h.metricsRepo.GetAverageUsage(time.Hour)
+	avgCpu := 0.0
+	avgMemory := 0.0
+
+	if err == nil && averageMetrics != nil && averageMetrics.SampleCount > 0 {
+		avgCpu = averageMetrics.AvgCPUUsage
+		avgMemory = averageMetrics.AvgMemoryUsage
+	} else {
+		// Fallback: try to get current metrics if no historical data
+		if h.systemCollector != nil {
+			currentMetrics, collectorErr := h.systemCollector.GetSystemMetrics()
+			if collectorErr == nil {
+				avgCpu = currentMetrics.CPU.Usage
+				avgMemory = currentMetrics.Memory.Percent
+			}
+		}
+	}
+
 	stats := map[string]interface{}{
-		"total_metrics": totalCount,
-		"timestamp":     time.Now(),
+		"total_metrics":    totalCount,
+		"total_hosts":      totalHosts,
+		"avg_cpu_usage":    avgCpu,
+		"avg_memory_usage": avgMemory,
+		"timestamp":        time.Now(),
 	}
 
 	c.JSON(http.StatusOK, APIResponse{
@@ -659,7 +856,7 @@ func (h *MetricsHandler) GetStats(c *gin.Context) {
 // @Router /api/v1/admin/metrics/cleanup [delete]
 func (h *MetricsHandler) CleanupOldMetrics(c *gin.Context) {
 	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
-	
+
 	if days <= 0 {
 		c.JSON(http.StatusBadRequest, APIResponse{
 			Success: false,
@@ -670,7 +867,7 @@ func (h *MetricsHandler) CleanupOldMetrics(c *gin.Context) {
 	}
 
 	cutoffTime := time.Now().AddDate(0, 0, -days)
-	
+
 	deletedCount, err := h.metricsRepo.DeleteOldRecords(cutoffTime)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, APIResponse{
@@ -683,7 +880,7 @@ func (h *MetricsHandler) CleanupOldMetrics(c *gin.Context) {
 
 	c.JSON(http.StatusOK, APIResponse{
 		Success: true,
-		Data:    map[string]interface{}{
+		Data: map[string]interface{}{
 			"deleted_count": deletedCount,
 			"cutoff_time":   cutoffTime,
 		},

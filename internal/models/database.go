@@ -11,7 +11,7 @@ type BaseModel struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Metric represents a single metrics entry in the database
+// Metric represents a single metrics entry in the database (GENIŞLETILDI)
 type Metric struct {
 	BaseModel
 
@@ -19,10 +19,50 @@ type Metric struct {
 	Hostname  string    `json:"hostname" gorm:"not null;index"`
 	Timestamp time.Time `json:"timestamp" gorm:"not null;index"`
 
-	// Simple metrics - starting with basic ones
-	CPUUsage      float64 `json:"cpu_usage"`
-	MemoryPercent float64 `json:"memory_percent"`
-	DiskPercent   float64 `json:"disk_percent"`
+	// CPU metrics - DETAYLI
+	CPUUsage     float64 `json:"cpu_usage"`
+	CPUCores     int     `json:"cpu_cores"`
+	CPUFrequency float64 `json:"cpu_frequency_mhz"`
+	CPULoadAvg1  float64 `json:"cpu_load_avg_1"`
+	CPULoadAvg5  float64 `json:"cpu_load_avg_5"`
+	CPULoadAvg15 float64 `json:"cpu_load_avg_15"`
+
+	// Memory metrics - DETAYLI
+	MemoryPercent     float64 `json:"memory_percent"`
+	MemoryTotal       uint64  `json:"memory_total_bytes"`
+	MemoryUsed        uint64  `json:"memory_used_bytes"`
+	MemoryAvailable   uint64  `json:"memory_available_bytes"`
+	MemoryFree        uint64  `json:"memory_free_bytes"`
+	MemoryCached      uint64  `json:"memory_cached_bytes"`
+	MemoryBuffers     uint64  `json:"memory_buffers_bytes"`
+	MemorySwapTotal   uint64  `json:"memory_swap_total_bytes"`
+	MemorySwapUsed    uint64  `json:"memory_swap_used_bytes"`
+	MemorySwapPercent float64 `json:"memory_swap_percent"`
+
+	// Disk metrics - DETAYLI
+	DiskPercent    float64 `json:"disk_percent"`
+	DiskTotal      uint64  `json:"disk_total_bytes"`
+	DiskUsed       uint64  `json:"disk_used_bytes"`
+	DiskFree       uint64  `json:"disk_free_bytes"`
+	DiskReadBytes  uint64  `json:"disk_read_bytes"`
+	DiskWriteBytes uint64  `json:"disk_write_bytes"`
+	DiskReadOps    uint64  `json:"disk_read_ops"`
+	DiskWriteOps   uint64  `json:"disk_write_ops"`
+
+	// Network metrics - DETAYLI
+	NetworkTotalSent     uint64 `json:"network_total_sent_bytes"`
+	NetworkTotalReceived uint64 `json:"network_total_recv_bytes"`
+	NetworkPacketsSent   uint64 `json:"network_packets_sent"`
+	NetworkPacketsRecv   uint64 `json:"network_packets_recv"`
+	NetworkErrors        uint64 `json:"network_errors"`
+	NetworkDrops         uint64 `json:"network_drops"`
+
+	// System info
+	Platform        string        `json:"platform"`
+	PlatformVersion string        `json:"platform_version"`
+	KernelArch      string        `json:"kernel_arch"`
+	Uptime          time.Duration `json:"uptime_seconds"`
+	ProcessCount    uint64        `json:"process_count"`
 }
 
 // TableName specifies the table name for Metric model
@@ -30,7 +70,120 @@ func (Metric) TableName() string {
 	return "metrics"
 }
 
-// DBSystemInfo represents system information in the database (renamed to avoid conflict)
+// ConvertSystemMetricsToDBMetric converts SystemMetrics to database Metric (TAM VERSİYON)
+func ConvertSystemMetricsToDBMetric(sm *SystemMetrics) *Metric {
+	metric := &Metric{
+		Hostname:  sm.Hostname,
+		Timestamp: sm.Timestamp,
+
+		// CPU metrics
+		CPUUsage:     sm.CPU.Usage,
+		CPUCores:     sm.CPU.Cores,
+		CPUFrequency: sm.CPU.Frequency,
+
+		// Memory metrics
+		MemoryPercent:     sm.Memory.Percent,
+		MemoryTotal:       sm.Memory.Total,
+		MemoryUsed:        sm.Memory.Used,
+		MemoryAvailable:   sm.Memory.Available,
+		MemoryFree:        sm.Memory.Free,
+		MemoryCached:      sm.Memory.Cached,
+		MemoryBuffers:     sm.Memory.Buffers,
+		MemorySwapTotal:   sm.Memory.SwapTotal,
+		MemorySwapUsed:    sm.Memory.SwapUsed,
+		MemorySwapPercent: sm.Memory.SwapPercent,
+
+		// Disk metrics
+		DiskPercent:    sm.Disk.Percent,
+		DiskTotal:      sm.Disk.Total,
+		DiskUsed:       sm.Disk.Used,
+		DiskFree:       sm.Disk.Free,
+		DiskReadBytes:  sm.Disk.IOStats.ReadBytes,
+		DiskWriteBytes: sm.Disk.IOStats.WriteBytes,
+		DiskReadOps:    sm.Disk.IOStats.ReadOps,
+		DiskWriteOps:   sm.Disk.IOStats.WriteOps,
+
+		// Network metrics
+		NetworkTotalSent:     sm.Network.TotalSent,
+		NetworkTotalReceived: sm.Network.TotalReceived,
+
+		// System info
+		Platform: "Unknown", // Will be filled by system info
+		Uptime:   sm.Uptime,
+	}
+
+	// CPU Load averages
+	if len(sm.CPU.LoadAvg) >= 3 {
+		metric.CPULoadAvg1 = sm.CPU.LoadAvg[0]
+		metric.CPULoadAvg5 = sm.CPU.LoadAvg[1]
+		metric.CPULoadAvg15 = sm.CPU.LoadAvg[2]
+	}
+
+	// Network aggregation
+	var totalPacketsSent, totalPacketsRecv, totalErrors, totalDrops uint64
+	for _, iface := range sm.Network.Interfaces {
+		totalPacketsSent += iface.PacketsSent
+		totalPacketsRecv += iface.PacketsRecv
+		totalErrors += iface.Errors
+		totalDrops += iface.Drops
+	}
+	metric.NetworkPacketsSent = totalPacketsSent
+	metric.NetworkPacketsRecv = totalPacketsRecv
+	metric.NetworkErrors = totalErrors
+	metric.NetworkDrops = totalDrops
+
+	return metric
+}
+
+// ConvertDBMetricToSystemMetrics converts database Metric to SystemMetrics (TAM VERSİYON)
+func ConvertDBMetricToSystemMetrics(m *Metric) *SystemMetrics {
+	return &SystemMetrics{
+		Hostname:  m.Hostname,
+		Timestamp: m.Timestamp,
+		Uptime:    m.Uptime,
+
+		CPU: CPUMetrics{
+			Usage:     m.CPUUsage,
+			Cores:     m.CPUCores,
+			Frequency: m.CPUFrequency,
+			LoadAvg:   []float64{m.CPULoadAvg1, m.CPULoadAvg5, m.CPULoadAvg15},
+		},
+
+		Memory: MemoryMetrics{
+			Total:       m.MemoryTotal,
+			Used:        m.MemoryUsed,
+			Available:   m.MemoryAvailable,
+			Free:        m.MemoryFree,
+			Cached:      m.MemoryCached,
+			Buffers:     m.MemoryBuffers,
+			Percent:     m.MemoryPercent,
+			SwapTotal:   m.MemorySwapTotal,
+			SwapUsed:    m.MemorySwapUsed,
+			SwapPercent: m.MemorySwapPercent,
+		},
+
+		Disk: DiskMetrics{
+			Total:   m.DiskTotal,
+			Used:    m.DiskUsed,
+			Free:    m.DiskFree,
+			Percent: m.DiskPercent,
+			IOStats: DiskIOStats{
+				ReadBytes:  m.DiskReadBytes,
+				WriteBytes: m.DiskWriteBytes,
+				ReadOps:    m.DiskReadOps,
+				WriteOps:   m.DiskWriteOps,
+			},
+		},
+
+		Network: NetworkMetrics{
+			TotalSent:     m.NetworkTotalSent,
+			TotalReceived: m.NetworkTotalReceived,
+			Interfaces:    []NetworkInterface{}, // Will be filled separately if needed
+		},
+	}
+}
+
+// DBSystemInfo represents system information in the database
 type DBSystemInfo struct {
 	BaseModel
 
@@ -103,59 +256,6 @@ type AlertHistory struct {
 func (AlertHistory) TableName() string {
 	return "alert_history"
 }
-
-// ConvertSystemMetricsToDBMetric converts SystemMetrics to database Metric (simplified)
-func ConvertSystemMetricsToDBMetric(sm *SystemMetrics) *Metric {
-	return &Metric{
-		Hostname:  sm.Hostname,
-		Timestamp: sm.Timestamp,
-
-		// Basic metrics only
-		CPUUsage:      sm.CPU.Usage,
-		MemoryPercent: sm.Memory.Percent,
-		DiskPercent:   sm.Disk.Percent,
-	}
-}
-
-// ConvertDBMetricToSystemMetrics converts database Metric to SystemMetrics (simplified)
-func ConvertDBMetricToSystemMetrics(m *Metric) *SystemMetrics {
-	return &SystemMetrics{
-		Hostname:  m.Hostname,
-		Timestamp: m.Timestamp,
-
-		CPU: CPUMetrics{
-			Usage: m.CPUUsage,
-		},
-
-		Memory: MemoryMetrics{
-			Percent: m.MemoryPercent,
-		},
-
-		Disk: DiskMetrics{
-			Percent: m.DiskPercent,
-		},
-
-		Network: NetworkMetrics{},
-	}
-}
-
-/*
-// ConvertSystemInfoToDB converts SystemInfo to database DBSystemInfo
-func ConvertSystemInfoToDB(si *SystemInfo) *DBSystemInfo {
-	return &DBSystemInfo{
-		Hostname:        si.Hostname,
-		Platform:        si.Platform,
-		PlatformFamily:  si.PlatformFamily,
-		PlatformVersion: si.PlatformVersion,
-		KernelVersion:   si.KernelVersion,
-		KernelArch:      si.KernelArch,
-		HostID:          si.HostID,
-		BootTime:        si.BootTime,
-		ProcessCount:    si.Processes,
-		LastSeen:        time.Now(),
-	}
-}
-*/
 
 // Additional models for repository responses
 

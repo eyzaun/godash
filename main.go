@@ -94,7 +94,7 @@ func initializeApplication() (*Application, error) {
 	collectorService := services.NewCollectorService(cfg, metricsRepo)
 
 	// Initialize API router
-	router := api.New(cfg, metricsRepo)
+	router := api.New(cfg, metricsRepo, collectorService)
 
 	// Create HTTP server
 	server := &http.Server{

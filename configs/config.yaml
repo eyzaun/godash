@@ -1,7 +1,7 @@
 # GoDash Development Configuration
 server:
   host: "0.0.0.0"
-  port: 8080
+  port: 8081
   mode: "debug"  # debug, release, test
   read_timeout: "15s"
   write_timeout: "15s"
@@ -27,9 +27,9 @@ database:
   log_level: "info"  # silent, error, warn, info
 
 metrics:
-  collection_interval: "1s"  # Ultra fast updates for development
+  collection_interval: "30s"
   retention_days: 7  # Keep data for 7 days in development
-  batch_size: 1  # Real-time updates - no batching
+  batch_size: 50
   enable_cpu: true
   enable_memory: true
   enable_disk: true
