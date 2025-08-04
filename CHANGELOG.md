@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-08-04
+
+### Added
+- 🚀 **Enhanced Dashboard with Advanced Speed Monitoring**
+- 💾 **Disk I/O Speed Monitoring**: Real-time read/write speeds in MB/s
+- 🌐 **Network Speed Monitoring**: Real-time upload/download speeds in Mbps
+- 📊 **Speed Visualization Charts**: Interactive donut charts for speed metrics
+- 📈 **Live Speed Updates**: 500ms real-time speed broadcasting via WebSocket
+- 🎯 **Speed Metric Cards**: Dedicated cards for Disk I/O and Network speed
+- 📱 **Responsive Speed UI**: Modern design for speed monitoring interface
+
+### Enhanced
+- **WebSocket Broadcasting**: Now includes detailed speed metrics (DiskIO, NetSpeed)
+- **API Responses**: Enhanced with real-time speed data in all metrics endpoints
+- **Dashboard Layout**: Added new metric cards for speed monitoring
+- **Chart Management**: Support for speed-based donut charts with animations
+- **Real-time Updates**: Speed metrics update every 500ms for live monitoring
+
+### Technical Improvements
+- **Speed Calculation**: Advanced algorithms for accurate speed measurements
+- **Performance Monitoring**: Real-time I/O performance tracking
+- **Data Broadcasting**: Enhanced WebSocket messages with speed information
+- **Chart Rendering**: Optimized for speed metric visualization
+- **UI Components**: New speed-focused dashboard components
+
+### Dashboard Features
+- **Disk I/O Speed Card**: Shows read/write speeds with live charts
+- **Network Speed Card**: Displays upload/download speeds with visualization
+- **Speed Indicators**: Color-coded performance indicators for I/O activity
+- **Live Charts**: Real-time speed charts with smooth animations
+- **Speed Statistics**: Detailed speed metrics in dashboard cards
+
 ## [1.0.0] - 2025-08-03
 
 ### Added
