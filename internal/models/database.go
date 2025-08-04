@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -11,7 +12,7 @@ type BaseModel struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Metric represents a single metrics entry in the database (GENIŞLETILDI)
+// Metric represents a single metrics entry in the database (SPEED FIELDS ADDED)
 type Metric struct {
 	BaseModel
 
@@ -39,7 +40,7 @@ type Metric struct {
 	MemorySwapUsed    uint64  `json:"memory_swap_used_bytes"`
 	MemorySwapPercent float64 `json:"memory_swap_percent"`
 
-	// Disk metrics - DETAYLI
+	// Disk metrics - DETAYLI (SPEED FIELDS ADDED)
 	DiskPercent    float64 `json:"disk_percent"`
 	DiskTotal      uint64  `json:"disk_total_bytes"`
 	DiskUsed       uint64  `json:"disk_used_bytes"`
@@ -48,14 +49,20 @@ type Metric struct {
 	DiskWriteBytes uint64  `json:"disk_write_bytes"`
 	DiskReadOps    uint64  `json:"disk_read_ops"`
 	DiskWriteOps   uint64  `json:"disk_write_ops"`
+	// NEW: Disk I/O Speed fields
+	DiskReadSpeed  float64 `json:"disk_read_speed_mbps"`  // MB/s
+	DiskWriteSpeed float64 `json:"disk_write_speed_mbps"` // MB/s
 
-	// Network metrics - DETAYLI
+	// Network metrics - DETAYLI (SPEED FIELDS ADDED)
 	NetworkTotalSent     uint64 `json:"network_total_sent_bytes"`
 	NetworkTotalReceived uint64 `json:"network_total_recv_bytes"`
 	NetworkPacketsSent   uint64 `json:"network_packets_sent"`
 	NetworkPacketsRecv   uint64 `json:"network_packets_recv"`
 	NetworkErrors        uint64 `json:"network_errors"`
 	NetworkDrops         uint64 `json:"network_drops"`
+	// NEW: Network Speed fields
+	NetworkUploadSpeed   float64 `json:"network_upload_speed_mbps"`   // Mbps
+	NetworkDownloadSpeed float64 `json:"network_download_speed_mbps"` // Mbps
 
 	// System info
 	Platform        string        `json:"platform"`
@@ -70,7 +77,7 @@ func (Metric) TableName() string {
 	return "metrics"
 }
 
-// ConvertSystemMetricsToDBMetric converts SystemMetrics to database Metric (TAM VERSİYON)
+// ConvertSystemMetricsToDBMetric converts SystemMetrics to database Metric (SPEED SUPPORT ADDED)
 func ConvertSystemMetricsToDBMetric(sm *SystemMetrics) *Metric {
 	metric := &Metric{
 		Hostname:  sm.Hostname,
@@ -93,7 +100,7 @@ func ConvertSystemMetricsToDBMetric(sm *SystemMetrics) *Metric {
 		MemorySwapUsed:    sm.Memory.SwapUsed,
 		MemorySwapPercent: sm.Memory.SwapPercent,
 
-		// Disk metrics
+		// Disk metrics (SPEED FIELDS ADDED)
 		DiskPercent:    sm.Disk.Percent,
 		DiskTotal:      sm.Disk.Total,
 		DiskUsed:       sm.Disk.Used,
@@ -102,10 +109,16 @@ func ConvertSystemMetricsToDBMetric(sm *SystemMetrics) *Metric {
 		DiskWriteBytes: sm.Disk.IOStats.WriteBytes,
 		DiskReadOps:    sm.Disk.IOStats.ReadOps,
 		DiskWriteOps:   sm.Disk.IOStats.WriteOps,
+		// NEW: Disk speeds
+		DiskReadSpeed:  sm.Disk.ReadSpeed,
+		DiskWriteSpeed: sm.Disk.WriteSpeed,
 
-		// Network metrics
+		// Network metrics (SPEED FIELDS ADDED)
 		NetworkTotalSent:     sm.Network.TotalSent,
 		NetworkTotalReceived: sm.Network.TotalReceived,
+		// NEW: Network speeds
+		NetworkUploadSpeed:   sm.Network.UploadSpeed,
+		NetworkDownloadSpeed: sm.Network.DownloadSpeed,
 
 		// System info
 		Platform: "Unknown", // Will be filled by system info
@@ -135,7 +148,7 @@ func ConvertSystemMetricsToDBMetric(sm *SystemMetrics) *Metric {
 	return metric
 }
 
-// ConvertDBMetricToSystemMetrics converts database Metric to SystemMetrics (TAM VERSİYON)
+// ConvertDBMetricToSystemMetrics converts database Metric to SystemMetrics (SPEED SUPPORT ADDED)
 func ConvertDBMetricToSystemMetrics(m *Metric) *SystemMetrics {
 	return &SystemMetrics{
 		Hostname:  m.Hostname,
@@ -173,12 +186,18 @@ func ConvertDBMetricToSystemMetrics(m *Metric) *SystemMetrics {
 				ReadOps:    m.DiskReadOps,
 				WriteOps:   m.DiskWriteOps,
 			},
+			// NEW: Disk speeds
+			ReadSpeed:  m.DiskReadSpeed,
+			WriteSpeed: m.DiskWriteSpeed,
 		},
 
 		Network: NetworkMetrics{
 			TotalSent:     m.NetworkTotalSent,
 			TotalReceived: m.NetworkTotalReceived,
 			Interfaces:    []NetworkInterface{}, // Will be filled separately if needed
+			// NEW: Network speeds
+			UploadSpeed:   m.NetworkUploadSpeed,
+			DownloadSpeed: m.NetworkDownloadSpeed,
 		},
 	}
 }
@@ -259,7 +278,7 @@ func (AlertHistory) TableName() string {
 
 // Additional models for repository responses
 
-// AverageMetrics represents average resource usage over time
+// AverageMetrics represents average resource usage over time (SPEED SUPPORT ADDED)
 type AverageMetrics struct {
 	Hostname       string        `json:"hostname,omitempty"`
 	Duration       time.Duration `json:"duration"`
@@ -275,9 +294,18 @@ type AverageMetrics struct {
 	MinMemoryUsage float64       `json:"min_memory_usage"`
 	MinDiskUsage   float64       `json:"min_disk_usage"`
 	SampleCount    int64         `json:"sample_count"`
+	// NEW: Speed averages
+	AvgDiskReadSpeed   float64 `json:"avg_disk_read_speed"`
+	AvgDiskWriteSpeed  float64 `json:"avg_disk_write_speed"`
+	AvgNetworkUpload   float64 `json:"avg_network_upload"`
+	AvgNetworkDownload float64 `json:"avg_network_download"`
+	MaxDiskReadSpeed   float64 `json:"max_disk_read_speed"`
+	MaxDiskWriteSpeed  float64 `json:"max_disk_write_speed"`
+	MaxNetworkUpload   float64 `json:"max_network_upload"`
+	MaxNetworkDownload float64 `json:"max_network_download"`
 }
 
-// MetricsSummary provides summary statistics for a time period
+// MetricsSummary provides summary statistics for a time period (SPEED SUPPORT ADDED)
 type MetricsSummary struct {
 	From           time.Time     `json:"from"`
 	To             time.Time     `json:"to"`
@@ -287,6 +315,11 @@ type MetricsSummary struct {
 	AvgCPUUsage    float64       `json:"avg_cpu_usage"`
 	AvgMemoryUsage float64       `json:"avg_memory_usage"`
 	AvgDiskUsage   float64       `json:"avg_disk_usage"`
+	// NEW: Speed summaries
+	AvgDiskReadSpeed   float64 `json:"avg_disk_read_speed"`
+	AvgDiskWriteSpeed  float64 `json:"avg_disk_write_speed"`
+	AvgNetworkUpload   float64 `json:"avg_network_upload"`
+	AvgNetworkDownload float64 `json:"avg_network_download"`
 }
 
 // HostUsage represents resource usage for a specific host
@@ -325,4 +358,29 @@ func GetAllModels() []interface{} {
 		&Alert{},
 		&AlertHistory{},
 	}
+}
+
+// NEW: Speed-related helper methods for database metrics
+
+// HasSpeedData checks if the metric has speed data
+func (m *Metric) HasSpeedData() bool {
+	return m.DiskReadSpeed >= 0 && m.DiskWriteSpeed >= 0 &&
+		m.NetworkUploadSpeed >= 0 && m.NetworkDownloadSpeed >= 0
+}
+
+// GetFormattedSpeeds returns formatted speed strings
+func (m *Metric) GetFormattedSpeeds() map[string]string {
+	return map[string]string{
+		"disk_read":        fmt.Sprintf("%.1f MB/s", m.DiskReadSpeed),
+		"disk_write":       fmt.Sprintf("%.1f MB/s", m.DiskWriteSpeed),
+		"network_upload":   fmt.Sprintf("%.1f Mbps", m.NetworkUploadSpeed),
+		"network_download": fmt.Sprintf("%.1f Mbps", m.NetworkDownloadSpeed),
+	}
+}
+
+// IsHighIO checks if I/O activity is high
+func (m *Metric) IsHighIO() bool {
+	highDiskIO := (m.DiskReadSpeed + m.DiskWriteSpeed) > 50.0               // 50 MB/s combined
+	highNetworkIO := (m.NetworkUploadSpeed + m.NetworkDownloadSpeed) > 50.0 // 50 Mbps combined
+	return highDiskIO || highNetworkIO
 }

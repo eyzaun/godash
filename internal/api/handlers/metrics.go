@@ -50,7 +50,7 @@ type Pagination struct {
 	TotalPages int   `json:"total_pages"`
 }
 
-// DetailedMetricsResponse - REAL-TIME VERİ İÇİN YENİ RESPONSE FORMAT
+// DetailedMetricsResponse - REAL-TIME VERİ İÇİN YENİ RESPONSE FORMAT (SPEED FIELDS ADDED)
 type DetailedMetricsResponse struct {
 	// Basic fields (frontend'in beklediği format)
 	CPUUsage      float64 `json:"cpu_usage"`
@@ -71,13 +71,21 @@ type DetailedMetricsResponse struct {
 	MemoryFree      uint64 `json:"memory_free"`
 
 	// Detailed Disk info
-	DiskTotal uint64 `json:"disk_total"`
-	DiskUsed  uint64 `json:"disk_used"`
-	DiskFree  uint64 `json:"disk_free"`
+	DiskTotal      uint64 `json:"disk_total"`
+	DiskUsed       uint64 `json:"disk_used"`
+	DiskFree       uint64 `json:"disk_free"`
+	DiskReadBytes  uint64 `json:"disk_read_bytes"`
+	DiskWriteBytes uint64 `json:"disk_write_bytes"`
+	// NEW: Disk I/O Speed
+	DiskReadSpeed  float64 `json:"disk_read_speed_mbps"`
+	DiskWriteSpeed float64 `json:"disk_write_speed_mbps"`
 
 	// Network info
 	NetworkSent     uint64 `json:"network_sent"`
 	NetworkReceived uint64 `json:"network_received"`
+	// NEW: Network Speed
+	NetworkUploadSpeed   float64 `json:"network_upload_speed_mbps"`
+	NetworkDownloadSpeed float64 `json:"network_download_speed_mbps"`
 }
 
 // GetCurrentMetrics gets the latest metrics from system collector (REAL-TIME)
@@ -101,7 +109,7 @@ func (h *MetricsHandler) GetCurrentMetrics(c *gin.Context) {
 		return
 	}
 
-	// Frontend'in beklediği format'a dönüştür
+	// Frontend'in beklediği format'a dönüştür (SPEED FIELDS ADDED)
 	response := DetailedMetricsResponse{
 		// Basic metrics (frontend'in chart'ları için)
 		CPUUsage:      systemMetrics.CPU.Usage,
@@ -121,14 +129,22 @@ func (h *MetricsHandler) GetCurrentMetrics(c *gin.Context) {
 		MemoryAvailable: systemMetrics.Memory.Available,
 		MemoryFree:      systemMetrics.Memory.Free,
 
-		// Detailed Disk info
-		DiskTotal: systemMetrics.Disk.Total,
-		DiskUsed:  systemMetrics.Disk.Used,
-		DiskFree:  systemMetrics.Disk.Free,
+		// Detailed Disk info (SPEED FIELDS ADDED)
+		DiskTotal:      systemMetrics.Disk.Total,
+		DiskUsed:       systemMetrics.Disk.Used,
+		DiskFree:       systemMetrics.Disk.Free,
+		DiskReadBytes:  systemMetrics.Disk.IOStats.ReadBytes,
+		DiskWriteBytes: systemMetrics.Disk.IOStats.WriteBytes,
+		// NEW: Disk I/O Speed
+		DiskReadSpeed:  systemMetrics.Disk.ReadSpeed,
+		DiskWriteSpeed: systemMetrics.Disk.WriteSpeed,
 
-		// Network info
+		// Network info (SPEED FIELDS ADDED)
 		NetworkSent:     systemMetrics.Network.TotalSent,
 		NetworkReceived: systemMetrics.Network.TotalReceived,
+		// NEW: Network Speed
+		NetworkUploadSpeed:   systemMetrics.Network.UploadSpeed,
+		NetworkDownloadSpeed: systemMetrics.Network.DownloadSpeed,
 	}
 
 	c.JSON(http.StatusOK, APIResponse{

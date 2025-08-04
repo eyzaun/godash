@@ -50,7 +50,7 @@ type WebSocketMessage struct {
 	Timestamp time.Time   `json:"timestamp"`
 }
 
-// DetailedMetricsWebSocketResponse - DETAYLI WEBSOCKET VERİ FORMAT
+// DetailedMetricsWebSocketResponse - DETAYLI WEBSOCKET VERİ FORMAT (SPEED FIELDS ADDED)
 type DetailedMetricsWebSocketResponse struct {
 	// Basic metrics (frontend'in chart'ları için)
 	CPUUsage      float64 `json:"cpu_usage"`
@@ -72,18 +72,24 @@ type DetailedMetricsWebSocketResponse struct {
 	MemoryCached    uint64 `json:"memory_cached"`
 	MemoryBuffers   uint64 `json:"memory_buffers"`
 
-	// Detailed Disk info
+	// Detailed Disk info (SPEED FIELDS ADDED)
 	DiskTotal      uint64 `json:"disk_total"`
 	DiskUsed       uint64 `json:"disk_used"`
 	DiskFree       uint64 `json:"disk_free"`
 	DiskReadBytes  uint64 `json:"disk_read_bytes"`
 	DiskWriteBytes uint64 `json:"disk_write_bytes"`
+	// NEW: Disk I/O Speed
+	DiskReadSpeed  float64 `json:"disk_read_speed_mbps"`
+	DiskWriteSpeed float64 `json:"disk_write_speed_mbps"`
 
-	// Network info
+	// Network info (SPEED FIELDS ADDED)
 	NetworkSent     uint64 `json:"network_sent"`
 	NetworkReceived uint64 `json:"network_received"`
 	NetworkErrors   uint64 `json:"network_errors"`
 	NetworkDrops    uint64 `json:"network_drops"`
+	// NEW: Network Speed
+	NetworkUploadSpeed   float64 `json:"network_upload_speed_mbps"`
+	NetworkDownloadSpeed float64 `json:"network_download_speed_mbps"`
 
 	// System info
 	Platform     string        `json:"platform"`
@@ -177,7 +183,7 @@ func (h *WebSocketHandler) HandleWebSocket(c *gin.Context) {
 	log.Printf("WebSocket client connected: %s (%s)", clientID, userAgent)
 }
 
-// BroadcastMetrics broadcasts detailed metrics to all connected clients (DÜZELTİLMİŞ VERSİYON)
+// BroadcastMetrics broadcasts detailed metrics to all connected clients (SPEED FIELDS ADDED)
 func (h *WebSocketHandler) BroadcastMetrics(metrics *models.SystemMetrics) {
 	// Get system info for additional details
 	systemInfo, err := h.systemCollector.GetSystemInfo()
@@ -185,7 +191,7 @@ func (h *WebSocketHandler) BroadcastMetrics(metrics *models.SystemMetrics) {
 		log.Printf("Warning: failed to get system info for broadcast: %v", err)
 	}
 
-	// Convert to detailed structure for frontend
+	// Convert to detailed structure for frontend (SPEED FIELDS ADDED)
 	detailedMetrics := DetailedMetricsWebSocketResponse{
 		// Basic metrics (frontend'in chart'ları için)
 		CPUUsage:      metrics.CPU.Usage,
@@ -207,16 +213,22 @@ func (h *WebSocketHandler) BroadcastMetrics(metrics *models.SystemMetrics) {
 		MemoryCached:    metrics.Memory.Cached,
 		MemoryBuffers:   metrics.Memory.Buffers,
 
-		// Detailed Disk info
+		// Detailed Disk info (SPEED FIELDS ADDED)
 		DiskTotal:      metrics.Disk.Total,
 		DiskUsed:       metrics.Disk.Used,
 		DiskFree:       metrics.Disk.Free,
 		DiskReadBytes:  metrics.Disk.IOStats.ReadBytes,
 		DiskWriteBytes: metrics.Disk.IOStats.WriteBytes,
+		// NEW: Disk I/O Speed
+		DiskReadSpeed:  metrics.Disk.ReadSpeed,
+		DiskWriteSpeed: metrics.Disk.WriteSpeed,
 
-		// Network info
+		// Network info (SPEED FIELDS ADDED)
 		NetworkSent:     metrics.Network.TotalSent,
 		NetworkReceived: metrics.Network.TotalReceived,
+		// NEW: Network Speed
+		NetworkUploadSpeed:   metrics.Network.UploadSpeed,
+		NetworkDownloadSpeed: metrics.Network.DownloadSpeed,
 
 		// System info
 		Uptime: metrics.Uptime,
@@ -252,9 +264,11 @@ func (h *WebSocketHandler) BroadcastMetrics(metrics *models.SystemMetrics) {
 	// Non-blocking broadcast - always send for real-time updates
 	select {
 	case h.hub.broadcast <- data:
-		log.Printf("📡 Broadcasting detailed metrics: CPU=%.1f%%, Memory=%.1f%%, Disk=%.1f%%, Cores=%d, Freq=%.0f MHz",
+		log.Printf("📡 Broadcasting detailed metrics: CPU=%.1f%%, Memory=%.1f%%, Disk=%.1f%%, Cores=%d, Freq=%.0f MHz, DiskIO=%.1f/%.1f MB/s, NetSpeed=%.1f/%.1f Mbps",
 			detailedMetrics.CPUUsage, detailedMetrics.MemoryPercent, detailedMetrics.DiskPercent,
-			detailedMetrics.CPUCores, detailedMetrics.CPUFrequency)
+			detailedMetrics.CPUCores, detailedMetrics.CPUFrequency,
+			detailedMetrics.DiskReadSpeed, detailedMetrics.DiskWriteSpeed,
+			detailedMetrics.NetworkUploadSpeed, detailedMetrics.NetworkDownloadSpeed)
 	default:
 		log.Println("Broadcast channel full, dropping detailed message")
 	}
@@ -557,9 +571,9 @@ func generateClientID() string {
 	return fmt.Sprintf("client_%d", time.Now().UnixNano())
 }
 
-// StartMetricsBroadcast starts periodic metrics broadcasting (DÜZELTİLMİŞ VERSİYON)
+// StartMetricsBroadcast starts periodic metrics broadcasting (SPEED SUPPORT ADDED)
 func (h *WebSocketHandler) StartMetricsBroadcast(ctx context.Context, interval time.Duration) {
-	log.Printf("📡 Starting detailed metrics broadcast with %v interval", interval)
+	log.Printf("📡 Starting detailed metrics broadcast with speed support - %v interval", interval)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -573,14 +587,14 @@ func (h *WebSocketHandler) StartMetricsBroadcast(ctx context.Context, interval t
 				continue
 			}
 
-			// Get FRESH system metrics from collector (REAL-TIME data)
+			// Get FRESH system metrics from collector (REAL-TIME data with speed)
 			systemMetrics, err := h.systemCollector.GetSystemMetrics()
 			if err != nil {
 				log.Printf("Failed to get system metrics for broadcast: %v", err)
 				continue
 			}
 
-			// Broadcast detailed metrics to all clients
+			// Broadcast detailed metrics with speed to all clients
 			h.BroadcastMetrics(systemMetrics)
 
 			// Also broadcast system status periodically (every 30 seconds)
@@ -589,7 +603,7 @@ func (h *WebSocketHandler) StartMetricsBroadcast(ctx context.Context, interval t
 			}
 
 		case <-ctx.Done():
-			log.Println("📡 Metrics broadcast stopped")
+			log.Println("📡 Metrics broadcast with speed support stopped")
 			return
 		}
 	}

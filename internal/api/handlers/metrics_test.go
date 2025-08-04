@@ -122,7 +122,7 @@ func setupTestRouter() (*gin.Engine, *MockMetricsRepository) {
 	gin.SetMode(gin.TestMode)
 
 	mockRepo := new(MockMetricsRepository)
-	handler := NewMetricsHandler(mockRepo)
+	handler := NewMetricsHandler(mockRepo, nil)
 
 	router := gin.New()
 	v1 := router.Group("/api/v1")

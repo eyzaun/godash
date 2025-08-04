@@ -1,11 +1,11 @@
 /**
- * Chart Manager for GoDash Dashboard (DÜZELTİLMİŞ VERSİYON)
- * Manages all Chart.js instances and real-time updates with historical trends support
+ * Chart Manager for GoDash Dashboard (WITH DISK I/O & NETWORK SPEED SUPPORT)
+ * Manages all Chart.js instances and real-time updates with speed monitoring
  */
 
 class ChartManager {
     constructor(options = {}) {
-        console.log('🎯 ChartManager constructor started');
+        console.log('🎯 ChartManager constructor started with speed support');
         
         // Check if Chart.js is available
         if (typeof Chart === 'undefined') {
@@ -20,20 +20,22 @@ class ChartManager {
             ...options
         };
 
-        // Chart instances
+        // Chart instances (DISK I/O ADDED)
         this.charts = {
             cpu: null,
             memory: null,
             disk: null,
+            diskIO: null,     // NEW: Disk I/O speed chart
             network: null,
             trends: null
         };
 
-        // Chart data storage
+        // Chart data storage (DISK I/O ADDED)
         this.chartData = {
             cpu: [],
             memory: [],
             disk: [],
+            diskIO: [],       // NEW: Disk I/O speed data
             network: [],
             trends: {
                 cpu: [],
@@ -47,7 +49,7 @@ class ChartManager {
         this.isLoadingHistorical = false;
         this.isInitialized = false;
 
-        // Color schemes
+        // Color schemes (DISK I/O COLOR ADDED)
         this.colors = this.getColorScheme();
 
         // Initialize Chart.js defaults
@@ -64,20 +66,20 @@ class ChartManager {
         if (document.readyState === 'loading') {
             console.log('📝 DOM not ready, waiting for DOMContentLoaded...');
             document.addEventListener('DOMContentLoaded', () => {
-                console.log('📝 DOMContentLoaded fired, initializing charts...');
+                console.log('📝 DOMContentLoaded fired, initializing charts with speed support...');
                 this.initializeCharts();
             });
         } else {
-            console.log('📝 DOM ready, initializing charts immediately...');
+            console.log('📝 DOM ready, initializing charts with speed support immediately...');
             // DOM is already ready, initialize immediately
             setTimeout(() => this.initializeCharts(), 100); // Small delay to ensure elements are fully rendered
         }
         
-        console.log('📊 Chart Manager initialized');
+        console.log('📊 Chart Manager initialized with speed support');
     }
 
     /**
-     * Get color scheme based on theme
+     * Get color scheme based on theme (DISK I/O COLOR ADDED)
      */
     getColorScheme() {
         const colors = {
@@ -89,6 +91,7 @@ class ChartManager {
             cpu: '#ff6b6b',
             memory: '#4ecdc4',
             disk: '#ffa726',
+            diskIO: '#e74c3c',      // NEW: Red for disk I/O
             network: '#ab47bc',
             background: 'rgba(0, 212, 255, 0.1)',
             border: 'rgba(0, 212, 255, 0.8)',
@@ -134,14 +137,14 @@ class ChartManager {
     }
 
     /**
-     * Initialize all charts
+     * Initialize all charts (DISK I/O INCLUDED)
      */
     initializeCharts() {
         try {
-            console.log('🎯 Initializing all charts...');
+            console.log('🎯 Initializing all charts with speed support...');
             
-            // Check if DOM elements exist before creating charts
-            const canvasIds = ['cpu-chart', 'memory-chart', 'disk-chart', 'network-chart', 'trends-chart'];
+            // Check if DOM elements exist before creating charts (DISK I/O INCLUDED)
+            const canvasIds = ['cpu-chart', 'memory-chart', 'disk-chart', 'disk-io-chart', 'network-chart', 'trends-chart'];
             const missingElements = [];
             
             canvasIds.forEach(id => {
@@ -163,11 +166,12 @@ class ChartManager {
             this.initializeCPUChart();
             this.initializeMemoryChart();
             this.initializeDiskChart();
+            this.initializeDiskIOChart(); // NEW: Initialize disk I/O chart
             this.initializeNetworkChart();
             this.initializeTrendsChart();
             
             this.isInitialized = true;
-            console.log('✅ All charts initialized successfully');
+            console.log('✅ All charts initialized successfully with speed support');
         } catch (error) {
             console.error('❌ Error initializing charts:', error);
         }
@@ -333,7 +337,95 @@ class ChartManager {
     }
 
     /**
-     * Initialize Network Chart
+     * Initialize Disk I/O Speed Chart (NEW)
+     */
+    initializeDiskIOChart() {
+        const canvas = document.getElementById('disk-io-chart');
+        if (!canvas) {
+            console.warn('❌ Disk I/O chart canvas not found - element ID: disk-io-chart');
+            return;
+        }
+        console.log('✅ Found Disk I/O chart canvas element');
+
+        try {
+            // Destroy existing chart if it exists to prevent Canvas reuse error
+            if (this.charts.diskIO) {
+                this.charts.diskIO.destroy();
+                this.charts.diskIO = null;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            
+            this.charts.diskIO = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Read Speed (MB/s)',
+                        data: [],
+                        borderColor: this.colors.diskIO,
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 4
+                    }, {
+                        label: 'Write Speed (MB/s)',
+                        data: [],
+                        borderColor: this.colors.warning,
+                        backgroundColor: 'rgba(255, 167, 38, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 4
+                    }]
+                },
+                options: {
+                    ...this.defaultChartOptions,
+                    scales: {
+                        x: {
+                            display: true,
+                            grid: {
+                                color: this.colors.grid
+                            },
+                            ticks: {
+                                color: this.colors.textSecondary,
+                                maxTicksLimit: 8
+                            }
+                        },
+                        y: {
+                            display: true,
+                            beginAtZero: true,
+                            grid: {
+                                color: this.colors.grid
+                            },
+                            ticks: {
+                                color: this.colors.textSecondary,
+                                callback: function(value) {
+                                    return value + ' MB/s';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                color: this.colors.text
+                            }
+                        }
+                    }
+                }
+            });
+            
+            console.log('✅ Disk I/O chart initialized');
+        } catch (error) {
+            console.error('❌ Error initializing Disk I/O chart:', error);
+        }
+    }
+
+    /**
+     * Initialize Network Chart (UPDATED FOR SPEED)
      */
     initializeNetworkChart() {
         const canvas = document.getElementById('network-chart');
@@ -351,19 +443,23 @@ class ChartManager {
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'Upload (MB/s)',
+                        label: 'Upload Speed (Mbps)',
                         data: [],
                         borderColor: this.colors.warning,
                         backgroundColor: 'rgba(255, 167, 38, 0.1)',
                         fill: false,
-                        tension: 0.4
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 4
                     }, {
-                        label: 'Download (MB/s)',
+                        label: 'Download Speed (Mbps)',
                         data: [],
                         borderColor: this.colors.secondary,
                         backgroundColor: 'rgba(91, 111, 238, 0.1)',
                         fill: false,
-                        tension: 0.4
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 4
                     }]
                 },
                 options: {
@@ -375,16 +471,21 @@ class ChartManager {
                                 color: this.colors.grid
                             },
                             ticks: {
-                                color: this.colors.textSecondary
+                                color: this.colors.textSecondary,
+                                maxTicksLimit: 8
                             }
                         },
                         y: {
                             display: true,
+                            beginAtZero: true,
                             grid: {
                                 color: this.colors.grid
                             },
                             ticks: {
-                                color: this.colors.textSecondary
+                                color: this.colors.textSecondary,
+                                callback: function(value) {
+                                    return value + ' Mbps';
+                                }
                             }
                         }
                     },
@@ -498,7 +599,7 @@ class ChartManager {
     }
 
     /**
-     * Update all metrics charts (DÜZELTİLMİŞ VERSİYON - DETAYLI VERİ DESTEĞİ)
+     * Update all metrics charts (SPEED SUPPORT ADDED)
      */
     updateMetrics(metrics) {
         if (!metrics) {
@@ -512,7 +613,7 @@ class ChartManager {
         }
 
         try {
-            console.log('🔄 Chart Manager updating all metrics with detailed data:', metrics);
+            console.log('🔄 Chart Manager updating all metrics with speed data:', metrics);
             
             // Update individual charts with detailed API data format
             this.updateCPUChart({ 
@@ -533,16 +634,22 @@ class ChartManager {
                 used: metrics.disk_used || 0
             });
             
-            // For network, use real data from API
+            // NEW: Update Disk I/O Speed Chart
+            this.updateDiskIOChart({
+                read_speed: metrics.disk_read_speed_mbps || 0,
+                write_speed: metrics.disk_write_speed_mbps || 0
+            });
+            
+            // NEW: Update Network Speed Chart (enhanced)
             this.updateNetworkChart({ 
-                total_sent_bytes: metrics.network_sent || 0, 
-                total_recv_bytes: metrics.network_received || 0 
+                upload_speed: metrics.network_upload_speed_mbps || 0,
+                download_speed: metrics.network_download_speed_mbps || 0
             });
 
             // Update trends chart with current metrics (real-time data points)
             this.updateTrendsChart(metrics);
 
-            console.log('✅ Chart Manager: All charts updated with detailed metrics');
+            console.log('✅ Chart Manager: All charts updated with speed data');
         } catch (error) {
             console.error('❌ Chart Manager error updating charts:', error);
         }
@@ -603,7 +710,37 @@ class ChartManager {
     }
 
     /**
-     * Update Network chart (DÜZELTİLMİŞ VERSİYON)
+     * Update Disk I/O Speed chart (NEW)
+     */
+    updateDiskIOChart(diskIOData) {
+        if (!this.charts.diskIO || !diskIOData) {
+            console.warn('❌ Disk I/O chart or data not available:', {chart: !!this.charts.diskIO, data: !!diskIOData});
+            return;
+        }
+
+        const timestamp = new Date().toLocaleTimeString();
+        const readSpeed = diskIOData.read_speed || 0;
+        const writeSpeed = diskIOData.write_speed || 0;
+
+        // Add new data point
+        this.charts.diskIO.data.labels.push(timestamp);
+        this.charts.diskIO.data.datasets[0].data.push(readSpeed);
+        this.charts.diskIO.data.datasets[1].data.push(writeSpeed);
+
+        // Keep only last N data points
+        const maxPoints = this.options.maxDataPoints;
+        if (this.charts.diskIO.data.labels.length > maxPoints) {
+            this.charts.diskIO.data.labels.shift();
+            this.charts.diskIO.data.datasets[0].data.shift();
+            this.charts.diskIO.data.datasets[1].data.shift();
+        }
+
+        this.charts.diskIO.update('active');
+        console.log(`🔄 Chart Manager updating Disk I/O: ${readSpeed.toFixed(1)} MB/s read, ${writeSpeed.toFixed(1)} MB/s write`);
+    }
+
+    /**
+     * Update Network chart (SPEED VERSION)
      */
     updateNetworkChart(networkData) {
         if (!this.charts.network || !networkData) {
@@ -612,13 +749,13 @@ class ChartManager {
         }
 
         const timestamp = new Date().toLocaleTimeString();
-        const upload = (networkData.total_sent_bytes || 0) / (1024 * 1024); // Convert to MB
-        const download = (networkData.total_recv_bytes || 0) / (1024 * 1024); // Convert to MB
+        const uploadSpeed = networkData.upload_speed || 0;
+        const downloadSpeed = networkData.download_speed || 0;
 
         // Add new data point
         this.charts.network.data.labels.push(timestamp);
-        this.charts.network.data.datasets[0].data.push(upload);
-        this.charts.network.data.datasets[1].data.push(download);
+        this.charts.network.data.datasets[0].data.push(uploadSpeed);
+        this.charts.network.data.datasets[1].data.push(downloadSpeed);
 
         // Keep only last N data points
         const maxPoints = this.options.maxDataPoints;
@@ -629,7 +766,7 @@ class ChartManager {
         }
 
         this.charts.network.update('active');
-        console.log(`🔄 Chart Manager updating Network chart: ${upload.toFixed(1)} MB sent, ${download.toFixed(1)} MB received`);
+        console.log(`🔄 Chart Manager updating Network speed: ${uploadSpeed.toFixed(1)} Mbps upload, ${downloadSpeed.toFixed(1)} Mbps download`);
     }
 
     /**
@@ -757,7 +894,7 @@ class ChartManager {
     }
 
     /**
-     * Destroy all charts (cleanup)
+     * Destroy all charts (cleanup) (DISK I/O INCLUDED)
      */
     destroyCharts() {
         Object.keys(this.charts).forEach(key => {
@@ -766,7 +903,7 @@ class ChartManager {
                 this.charts[key] = null;
             }
         });
-        console.log('🗑️ All charts destroyed');
+        console.log('🗑️ All charts destroyed (including Disk I/O)');
     }
 }
 

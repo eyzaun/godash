@@ -1,6 +1,6 @@
 /**
- * GoDash Dashboard Main Application (DÜZELTİLMİŞ VERSİYON)
- * Orchestrates WebSocket connections, chart management, and UI updates
+ * GoDash Dashboard Main Application (WITH SPEED SUPPORT)
+ * Orchestrates WebSocket connections, chart management, and UI updates with speed monitoring
  */
 
 class DashboardApp {
@@ -33,7 +33,7 @@ class DashboardApp {
         this.websocket = null;
         this.chartManager = null;
 
-        // DOM element caches
+        // DOM element caches (SPEED ELEMENTS ADDED)
         this.elements = {};
         
         // Data storage
@@ -52,7 +52,7 @@ class DashboardApp {
         // Event handlers registry
         this.eventHandlers = new Map();
 
-        this.log('🎯 Dashboard app initialized with options:', this.options);
+        this.log('🎯 Dashboard app initialized with speed support:', this.options);
     }
 
     /**
@@ -65,7 +65,7 @@ class DashboardApp {
         }
 
         try {
-            this.log('🚀 Initializing GoDash Dashboard...');
+            this.log('🚀 Initializing GoDash Dashboard with speed support...');
 
             // Cache DOM elements
             this.cacheElements();
@@ -91,7 +91,7 @@ class DashboardApp {
             this.isInitialized = true;
             this.stats.connectionTime = new Date();
             
-            this.log('✅ Dashboard initialized successfully');
+            this.log('✅ Dashboard initialized successfully with speed support');
             this.updateConnectionStatus('connected', 'Connected');
 
         } catch (error) {
@@ -105,7 +105,7 @@ class DashboardApp {
     }
 
     /**
-     * Cache frequently used DOM elements
+     * Cache frequently used DOM elements (SPEED ELEMENTS ADDED)
      */
     cacheElements() {
         this.elements = {
@@ -126,7 +126,7 @@ class DashboardApp {
             diskValue: document.getElementById('disk-value'),
             networkValue: document.getElementById('network-value'),
 
-            // Metric details (DÜZELTİLMİŞ - YENİ ALANLAR)
+            // Metric details (SPEED FIELDS ADDED)
             cpuCores: document.getElementById('cpu-cores'),
             cpuFrequency: document.getElementById('cpu-frequency'),
             memoryUsed: document.getElementById('memory-used'),
@@ -135,6 +135,13 @@ class DashboardApp {
             diskTotal: document.getElementById('disk-total'),
             networkSent: document.getElementById('network-sent'),
             networkReceived: document.getElementById('network-received'),
+            
+            // NEW: Speed display elements
+            diskIOValue: document.getElementById('disk-io-value'),
+            diskReadSpeed: document.getElementById('disk-read-speed'),
+            diskWriteSpeed: document.getElementById('disk-write-speed'),
+            networkUploadSpeed: document.getElementById('network-upload-speed'),
+            networkDownloadSpeed: document.getElementById('network-download-speed'),
 
             // System information
             systemHostname: document.getElementById('system-hostname'),
@@ -159,15 +166,21 @@ class DashboardApp {
             mobileMenuToggle: document.getElementById('mobile-menu-toggle')
         };
 
-        this.log('📋 DOM elements cached');
+        this.log('📋 DOM elements cached with speed support');
         
-        // Debug element existence
+        // Debug element existence (SPEED ELEMENTS INCLUDED)
         console.log('🔍 Element check:');
         console.log('cpuValue:', this.elements.cpuValue);
         console.log('memoryValue:', this.elements.memoryValue);
         console.log('diskValue:', this.elements.diskValue);
+        console.log('diskIOValue:', this.elements.diskIOValue);
+        console.log('networkValue:', this.elements.networkValue);
         console.log('cpuCores:', this.elements.cpuCores);
         console.log('cpuFrequency:', this.elements.cpuFrequency);
+        console.log('diskReadSpeed:', this.elements.diskReadSpeed);
+        console.log('diskWriteSpeed:', this.elements.diskWriteSpeed);
+        console.log('networkUploadSpeed:', this.elements.networkUploadSpeed);
+        console.log('networkDownloadSpeed:', this.elements.networkDownloadSpeed);
     }
 
     /**
@@ -175,7 +188,7 @@ class DashboardApp {
      */
     async initializeChartManager() {
         try {
-            console.log('🎯 Initializing Chart Manager...');
+            console.log('🎯 Initializing Chart Manager with speed support...');
             
             this.chartManager = new ChartManager({
                 maxDataPoints: 50,
@@ -187,7 +200,7 @@ class DashboardApp {
             await new Promise((resolve) => {
                 const checkInitialized = () => {
                     if (this.chartManager.isInitialized) {
-                        console.log('📊 Chart manager initialized successfully');
+                        console.log('📊 Chart manager initialized successfully with speed support');
                         resolve(true);
                     } else {
                         setTimeout(checkInitialized, 100);
@@ -264,7 +277,7 @@ class DashboardApp {
         });
 
         this.websocket.on('metrics', (data) => {
-            console.log('🔥 DETAILED METRICS DATA RECEIVED:', data);
+            console.log('🔥 DETAILED METRICS DATA WITH SPEED RECEIVED:', data);
             this.handleMetricsUpdate(data);
         });
 
@@ -370,30 +383,30 @@ class DashboardApp {
     }
 
     /**
-     * Load current metrics from API (DÜZELTİLMİŞ VERSİYON)
+     * Load current metrics from API (SPEED SUPPORT ADDED)
      */
     async loadCurrentMetrics() {
         try {
-            console.log('🔄 Loading current metrics...');
+            console.log('🔄 Loading current metrics with speed data...');
             const response = await fetch('/api/v1/metrics/current');
             const result = await response.json();
 
             if (result.success && result.data) {
-                console.log('📊 Current detailed metrics data:', result.data);
+                console.log('📊 Current detailed metrics with speed data:', result.data);
                 
                 this.updateMetricsDisplay(result.data);
                 
                 // Update charts as well
                 if (this.chartManager) {
-                    console.log('📈 Calling chartManager.updateMetrics...');
+                    console.log('📈 Calling chartManager.updateMetrics with speed data...');
                     this.chartManager.updateMetrics(result.data);
-                    console.log('✅ Chart manager update completed');
+                    console.log('✅ Chart manager update completed with speed data');
                 } else {
                     console.warn('❌ Chart manager not available in dashboard');
                 }
                 
                 this.currentMetrics = result.data;
-                this.log('📊 Current metrics loaded and charts updated');
+                this.log('📊 Current metrics with speed loaded and charts updated');
             } else {
                 console.warn('❌ Invalid metrics response:', result);
             }
@@ -480,7 +493,7 @@ class DashboardApp {
     }
 
     /**
-     * Handle metrics update from WebSocket (DÜZELTİLMİŞ VERSİYON)
+     * Handle metrics update from WebSocket (SPEED SUPPORT ADDED)
      */
     handleMetricsUpdate(data) {
         if (!data) {
@@ -488,17 +501,17 @@ class DashboardApp {
             return;
         }
 
-        this.log('📊 Detailed metrics data received:', data);
+        this.log('📊 Detailed metrics with speed data received:', data);
 
         this.stats.totalUpdates++;
         this.lastUpdateTime = new Date();
 
-        // Update metrics display with detailed data
+        // Update metrics display with speed data
         this.updateMetricsDisplay(data);
 
         // Update charts
         if (this.chartManager) {
-            this.log('📈 Updating charts with detailed data...');
+            this.log('📈 Updating charts with speed data...');
             this.chartManager.updateMetrics(data);
         } else {
             this.log('⚠️ Chart manager not available, skipping chart updates');
@@ -516,7 +529,7 @@ class DashboardApp {
         // Also update Quick Stats with current values as fallback
         this.updateQuickStatsFromCurrentMetrics(data);
 
-        this.log('✅ Detailed metrics update completed');
+        this.log('✅ Detailed metrics with speed update completed');
     }
 
     /**
@@ -530,7 +543,7 @@ class DashboardApp {
     }
 
     /**
-     * Update metrics display in UI (DÜZELTİLMİŞ VERSİYON - DETAYLI VERİ DESTEĞİ)
+     * Update metrics display in UI (SPEED SUPPORT ADDED)
      */
     updateMetricsDisplay(metrics) {
         if (!metrics) {
@@ -539,7 +552,7 @@ class DashboardApp {
         }
 
         try {
-            console.log('🔄 Updating detailed metrics display:', metrics);
+            console.log('🔄 Updating detailed metrics display with speed data:', metrics);
             
             // CPU metrics
             if (metrics.cpu_usage !== undefined) {
@@ -548,7 +561,7 @@ class DashboardApp {
                 console.log('✅ CPU value updated to:', cpuPercentage);
             }
 
-            // CPU detailed info (YENİ)
+            // CPU detailed info
             if (metrics.cpu_cores !== undefined) {
                 this.updateElementText(this.elements.cpuCores, metrics.cpu_cores);
                 console.log('✅ CPU cores updated to:', metrics.cpu_cores);
@@ -566,7 +579,7 @@ class DashboardApp {
                 console.log('✅ Memory value updated to:', memoryPercentage);
             }
 
-            // Memory detailed info (YENİ)
+            // Memory detailed info
             if (metrics.memory_used !== undefined && metrics.memory_total !== undefined) {
                 const usedGB = (metrics.memory_used / (1024*1024*1024)).toFixed(1);
                 const totalGB = (metrics.memory_total / (1024*1024*1024)).toFixed(1);
@@ -582,7 +595,7 @@ class DashboardApp {
                 console.log('✅ Disk value updated to:', diskPercentage);
             }
 
-            // Disk detailed info (YENİ)
+            // Disk detailed info
             if (metrics.disk_used !== undefined && metrics.disk_total !== undefined) {
                 const usedGB = (metrics.disk_used / (1024*1024*1024)).toFixed(1);
                 const totalGB = (metrics.disk_total / (1024*1024*1024)).toFixed(1);
@@ -591,17 +604,36 @@ class DashboardApp {
                 console.log('✅ Disk details updated:', usedGB + ' / ' + totalGB + ' GB');
             }
 
-            // Network metrics (DÜZELTİLMİŞ)
+            // NEW: Disk I/O Speed metrics
+            if (metrics.disk_read_speed_mbps !== undefined && metrics.disk_write_speed_mbps !== undefined) {
+                const readSpeed = metrics.disk_read_speed_mbps.toFixed(1);
+                const writeSpeed = metrics.disk_write_speed_mbps.toFixed(1);
+                const totalIOSpeed = (metrics.disk_read_speed_mbps + metrics.disk_write_speed_mbps).toFixed(1);
+                
+                this.updateElementText(this.elements.diskIOValue, totalIOSpeed);
+                this.updateElementText(this.elements.diskReadSpeed, `${readSpeed} MB/s`);
+                this.updateElementText(this.elements.diskWriteSpeed, `${writeSpeed} MB/s`);
+                console.log('✅ Disk I/O speed updated:', readSpeed + ' MB/s read, ' + writeSpeed + ' MB/s write');
+            }
+
+            // NEW: Network Speed metrics (ENHANCED)
+            if (metrics.network_upload_speed_mbps !== undefined && metrics.network_download_speed_mbps !== undefined) {
+                const uploadSpeed = metrics.network_upload_speed_mbps.toFixed(1);
+                const downloadSpeed = metrics.network_download_speed_mbps.toFixed(1);
+                const totalNetworkSpeed = (metrics.network_upload_speed_mbps + metrics.network_download_speed_mbps).toFixed(1);
+                
+                this.updateElementText(this.elements.networkValue, totalNetworkSpeed);
+                this.updateElementText(this.elements.networkUploadSpeed, `${uploadSpeed} Mbps`);
+                this.updateElementText(this.elements.networkDownloadSpeed, `${downloadSpeed} Mbps`);
+                console.log('✅ Network speed updated:', uploadSpeed + ' Mbps upload, ' + downloadSpeed + ' Mbps download');
+            }
+
+            // Legacy network info (total bytes) - keeping for backward compatibility
             if (metrics.network_sent !== undefined && metrics.network_received !== undefined) {
                 const sentMB = (metrics.network_sent / (1024*1024)).toFixed(1);
                 const receivedMB = (metrics.network_received / (1024*1024)).toFixed(1);
                 this.updateElementText(this.elements.networkSent, `${sentMB} MB`);
                 this.updateElementText(this.elements.networkReceived, `${receivedMB} MB`);
-                
-                // Calculate network activity for the main metric
-                const networkActivity = parseFloat(sentMB) + parseFloat(receivedMB);
-                this.updateElementText(this.elements.networkValue, Math.round(networkActivity));
-                console.log('✅ Network details updated:', sentMB + ' MB sent, ' + receivedMB + ' MB received');
             }
 
             // System information
@@ -614,7 +646,7 @@ class DashboardApp {
                 this.updateElementText(this.elements.systemPlatform, metrics.platform);
             }
 
-            this.log('✅ Detailed metrics display updated successfully');
+            this.log('✅ Detailed metrics display updated with speed data');
 
         } catch (error) {
             this.log('❌ Error updating metrics display:', error);
@@ -967,10 +999,10 @@ class DashboardApp {
     }
 
     /**
-     * Setup refresh intervals (DÜZELTİLMİŞ VERSİYON)
+     * Setup refresh intervals (ULTRA HIGH FREQUENCY FOR SPEED)
      */
     setupRefreshIntervals() {
-        console.log('🚀 SETTING UP 500MS INTERVALS FOR ULTRA REAL-TIME!');
+        console.log('🚀 SETTING UP 500MS INTERVALS FOR ULTRA REAL-TIME WITH SPEED!');
         
         // Clear any existing intervals first
         if (this.statsInterval) clearInterval(this.statsInterval);
@@ -998,7 +1030,7 @@ class DashboardApp {
         // Current metrics refresh (every 500ms)
         this.metricsInterval = setInterval(() => {
             if (!this.isPaused) {
-                console.log('📈 500ms Metrics API call');
+                console.log('📈 500ms Metrics API call with speed data');
                 this.loadCurrentMetrics();
             }
         }, 500); // 500ms for ultra real-time updates
@@ -1008,7 +1040,7 @@ class DashboardApp {
             this.updateLastUpdateTime();
         }, 1000);
         
-        console.log('✅ 500MS INTERVALS SET UP SUCCESSFULLY!');
+        console.log('✅ 500MS INTERVALS SET UP SUCCESSFULLY WITH SPEED SUPPORT!');
     }
 
     /**

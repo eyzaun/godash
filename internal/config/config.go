@@ -113,7 +113,7 @@ func Load() (*Config, error) {
 func loadServerConfig() ServerConfig {
 	return ServerConfig{
 		Host:         getEnvString("SERVER_HOST", "0.0.0.0"),
-		Port:         getEnvInt("SERVER_PORT", 8081), // Changed to 8081 to avoid conflicts
+		Port:         getEnvInt("SERVER_PORT", 8082), // Changed to 8082 to avoid conflicts
 		Mode:         getEnvString("SERVER_MODE", "debug"),
 		ReadTimeout:  getEnvDuration("SERVER_READ_TIMEOUT", 30*time.Second),
 		WriteTimeout: getEnvDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),

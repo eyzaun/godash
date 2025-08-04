@@ -34,7 +34,7 @@ type Collector interface {
 	IsHealthy() (bool, []string, error)
 }
 
-// SystemCollector implements the Collector interface (DÜZELTİLMİŞ VERSİYON)
+// SystemCollector implements the Collector interface (SPEED TRACKING ADDED)
 type SystemCollector struct {
 	cpuCollector    *CPUCollector
 	memoryCollector *MemoryCollector
@@ -50,9 +50,13 @@ type SystemCollector struct {
 	collectionCount int64
 	errors          []error
 
-	// Network tracking for rates (DÜZELTİLMİŞ)
+	// NEW: Speed tracking for calculations
+	lastDiskStats    models.DiskIOStats
+	lastDiskTime     time.Time
 	lastNetworkStats map[string]net.IOCountersStat
 	lastNetworkTime  time.Time
+	lastNetworkSent  uint64
+	lastNetworkRecv  uint64
 }
 
 // CollectorConfig holds configuration for the system collector
@@ -77,7 +81,7 @@ func DefaultCollectorConfig() *CollectorConfig {
 	}
 }
 
-// NewSystemCollector creates a new system collector (DÜZELTİLMİŞ VERSİYON)
+// NewSystemCollector creates a new system collector (SPEED TRACKING ADDED)
 func NewSystemCollector(config *CollectorConfig) *SystemCollector {
 	if config == nil {
 		config = DefaultCollectorConfig()
@@ -99,16 +103,18 @@ func NewSystemCollector(config *CollectorConfig) *SystemCollector {
 		errors:           make([]error, 0),
 		lastNetworkStats: make(map[string]net.IOCountersStat),
 		lastNetworkTime:  time.Now(),
+		lastDiskTime:     time.Now(),
 	}
 }
 
-// GetSystemMetrics collects current system metrics (DÜZELTİLMİŞ VERSİYON)
+// GetSystemMetrics collects current system metrics (SPEED CALCULATION ADDED)
 func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 	sc.mutex.Lock()
 	defer sc.mutex.Unlock()
 
 	var metrics models.SystemMetrics
 	var collectErrors []error
+	currentTime := time.Now()
 
 	// Get hostname
 	hostname, err := os.Hostname()
@@ -127,7 +133,7 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 	// Set basic info
 	metrics.Hostname = hostname
 	metrics.Uptime = time.Duration(uptime) * time.Second
-	metrics.Timestamp = time.Now()
+	metrics.Timestamp = currentTime
 
 	// Collect CPU metrics
 	if sc.enabledMetrics["cpu"] {
@@ -170,7 +176,7 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 		}
 	}
 
-	// Collect Disk metrics (DÜZELTİLMİŞ)
+	// Collect Disk metrics (SPEED CALCULATION ADDED)
 	if sc.enabledMetrics["disk"] {
 		diskMetrics, err := sc.diskCollector.GetDiskMetrics()
 		if err != nil {
@@ -200,13 +206,30 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 					ReadTime:   10,
 					WriteTime:  5,
 				},
+				ReadSpeed:  0, // Default to 0
+				WriteSpeed: 0, // Default to 0
 			}
 		} else {
 			metrics.Disk = *diskMetrics
+
+			// NEW: Calculate disk I/O speed
+			timeDiff := currentTime.Sub(sc.lastDiskTime)
+			if sc.lastDiskTime.IsZero() || timeDiff <= 0 {
+				// First measurement or invalid time diff
+				metrics.Disk.ReadSpeed = 0
+				metrics.Disk.WriteSpeed = 0
+			} else {
+				// Calculate speeds using helper method
+				metrics.Disk.CalculateDiskSpeed(sc.lastDiskStats, timeDiff)
+			}
+
+			// Store current stats for next calculation
+			sc.lastDiskStats = metrics.Disk.IOStats
+			sc.lastDiskTime = currentTime
 		}
 	}
 
-	// Collect Network metrics (DÜZELTİLMİŞ VERSİYON)
+	// Collect Network metrics (SPEED CALCULATION ADDED)
 	if sc.enabledMetrics["network"] {
 		networkMetrics, err := sc.getNetworkMetrics()
 		if err != nil {
@@ -226,14 +249,32 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 				},
 				TotalSent:     1024 * 1024 * 10,
 				TotalReceived: 1024 * 1024 * 50,
+				UploadSpeed:   0, // Default to 0
+				DownloadSpeed: 0, // Default to 0
 			}
 		} else {
 			metrics.Network = *networkMetrics
+
+			// NEW: Calculate network speed
+			timeDiff := currentTime.Sub(sc.lastNetworkTime)
+			if sc.lastNetworkTime.IsZero() || timeDiff <= 0 {
+				// First measurement or invalid time diff
+				metrics.Network.UploadSpeed = 0
+				metrics.Network.DownloadSpeed = 0
+			} else {
+				// Calculate speeds using helper method
+				metrics.Network.CalculateNetworkSpeed(sc.lastNetworkSent, sc.lastNetworkRecv, timeDiff)
+			}
+
+			// Store current stats for next calculation
+			sc.lastNetworkSent = metrics.Network.TotalSent
+			sc.lastNetworkRecv = metrics.Network.TotalReceived
+			sc.lastNetworkTime = currentTime
 		}
 	}
 
 	// Update collection stats
-	sc.lastCollection = time.Now()
+	sc.lastCollection = currentTime
 	sc.collectionCount++
 	sc.errors = collectErrors
 
@@ -245,7 +286,7 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 	return &metrics, nil
 }
 
-// getNetworkMetrics collects network usage metrics (DÜZELTİLMİŞ VERSİYON)
+// getNetworkMetrics collects network usage metrics (ENHANCED FOR SPEED TRACKING)
 func (sc *SystemCollector) getNetworkMetrics() (*models.NetworkMetrics, error) {
 	// Get network I/O counters
 	netCounters, err := net.IOCounters(true) // per interface
@@ -255,8 +296,6 @@ func (sc *SystemCollector) getNetworkMetrics() (*models.NetworkMetrics, error) {
 
 	var totalSent, totalRecv uint64
 	var interfaces []models.NetworkInterface
-
-	currentTime := time.Now()
 
 	for _, counter := range netCounters {
 		// Skip loopback interfaces
@@ -286,8 +325,6 @@ func (sc *SystemCollector) getNetworkMetrics() (*models.NetworkMetrics, error) {
 		sc.lastNetworkStats[counter.Name] = counter
 	}
 
-	sc.lastNetworkTime = currentTime
-
 	// Ensure we have at least some data even if no real interfaces found
 	if len(interfaces) == 0 {
 		// Create a dummy interface to prevent frontend issues
@@ -306,6 +343,9 @@ func (sc *SystemCollector) getNetworkMetrics() (*models.NetworkMetrics, error) {
 		Interfaces:    interfaces,
 		TotalSent:     totalSent,
 		TotalReceived: totalRecv,
+		// Speed will be calculated in GetSystemMetrics
+		UploadSpeed:   0,
+		DownloadSpeed: 0,
 	}, nil
 }
 
@@ -514,7 +554,7 @@ func (sc *SystemCollector) sortProcesses(processes []models.ProcessInfo, sortBy 
 	}
 }
 
-// IsHealthy checks if the system is healthy
+// IsHealthy checks if the system is healthy (SPEED CHECKS ADDED)
 func (sc *SystemCollector) IsHealthy() (bool, []string, error) {
 	issues := make([]string, 0) // Initialize empty slice, not nil
 	healthy := true
@@ -547,9 +587,23 @@ func (sc *SystemCollector) IsHealthy() (bool, []string, error) {
 	// Check if CPU usage is extremely high
 	if sc.enabledMetrics["cpu"] {
 		metrics, err := sc.GetSystemMetrics()
-		if err == nil && metrics.CPU.Usage > 95 {
-			healthy = false
-			issues = append(issues, fmt.Sprintf("CPU: Usage above 95%% (%.1f%%)", metrics.CPU.Usage))
+		if err == nil {
+			if metrics.CPU.Usage > 95 {
+				healthy = false
+				issues = append(issues, fmt.Sprintf("CPU: Usage above 95%% (%.1f%%)", metrics.CPU.Usage))
+			}
+
+			// NEW: Check for extremely high disk I/O
+			if metrics.Disk.IsDiskIOHigh() {
+				issues = append(issues, fmt.Sprintf("Disk I/O: High activity (R: %.1f MB/s, W: %.1f MB/s)",
+					metrics.Disk.ReadSpeed, metrics.Disk.WriteSpeed))
+			}
+
+			// NEW: Check for extremely high network traffic
+			if metrics.Network.IsNetworkTrafficHigh() {
+				issues = append(issues, fmt.Sprintf("Network: High traffic (U: %.1f Mbps, D: %.1f Mbps)",
+					metrics.Network.UploadSpeed, metrics.Network.DownloadSpeed))
+			}
 		}
 	}
 
@@ -590,7 +644,7 @@ func (sc *SystemCollector) SetEnabledMetrics(metrics map[string]bool) {
 	}
 }
 
-// Reset resets the collector state
+// Reset resets the collector state (SPEED TRACKING RESET ADDED)
 func (sc *SystemCollector) Reset() {
 	sc.mutex.Lock()
 	defer sc.mutex.Unlock()
@@ -601,4 +655,25 @@ func (sc *SystemCollector) Reset() {
 	sc.lastCollection = time.Now()
 	sc.lastNetworkStats = make(map[string]net.IOCountersStat)
 	sc.lastNetworkTime = time.Now()
+	sc.lastDiskTime = time.Now()
+	// NEW: Reset speed tracking
+	sc.lastDiskStats = models.DiskIOStats{}
+	sc.lastNetworkSent = 0
+	sc.lastNetworkRecv = 0
+}
+
+// NEW: Speed-related helper methods
+
+// GetLastSpeedMeasurement returns the last speed measurement times
+func (sc *SystemCollector) GetLastSpeedMeasurement() (diskTime, networkTime time.Time) {
+	sc.mutex.RLock()
+	defer sc.mutex.RUnlock()
+	return sc.lastDiskTime, sc.lastNetworkTime
+}
+
+// HasSpeedHistory checks if we have enough history for speed calculation
+func (sc *SystemCollector) HasSpeedHistory() bool {
+	sc.mutex.RLock()
+	defer sc.mutex.RUnlock()
+	return !sc.lastDiskTime.IsZero() && !sc.lastNetworkTime.IsZero()
 }
