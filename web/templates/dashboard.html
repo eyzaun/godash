@@ -97,6 +97,10 @@
                                 <span>Frequency</span>
                                 <span id="cpu-frequency">0 GHz</span>
                             </div>
+                            <div class="detail-item">
+                                <span>Load Avg</span>
+                                <span id="cpu-load-avg">0.00</span>
+                            </div>
                         </div>
                     </div>
 
@@ -126,6 +130,10 @@
                                 <span>Total</span>
                                 <span id="memory-total">0 GB</span>
                             </div>
+                            <div class="detail-item">
+                                <span>Cached</span>
+                                <span id="memory-cached">0 GB</span>
+                            </div>
                         </div>
                     </div>
 
@@ -134,12 +142,12 @@
                         <div class="metric-header">
                             <h3>
                                 <i class="fas fa-hdd"></i>
-                                Disk Usage
+                                Disk I/O
                             </h3>
                         </div>
                         
                         <div class="metric-value">
-                            <span id="disk-value">0</span><span class="unit">%</span>
+                            <span id="disk-value">0</span><span class="unit">MB/s</span>
                         </div>
                         
                         <div class="chart-container">
@@ -148,6 +156,18 @@
                         
                         <div class="metric-details">
                             <div class="detail-item">
+                                <span>Read</span>
+                                <span id="disk-read-speed">📖 0 MB/s</span>
+                            </div>
+                            <div class="detail-item">
+                                <span>Write</span>
+                                <span id="disk-write-speed">✏️ 0 MB/s</span>
+                            </div>
+                            <div class="detail-item">
+                                <span>Usage</span>
+                                <span id="disk-usage-percent">0%</span>
+                            </div>
+                            <div class="detail-item">
                                 <span>Used</span>
                                 <span id="disk-used">0 GB</span>
                             </div>
@@ -155,44 +175,19 @@
                                 <span>Total</span>
                                 <span id="disk-total">0 GB</span>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- NEW: Disk I/O Speed Card -->
-                    <div class="metric-card disk-io-card">
-                        <div class="metric-header">
-                            <h3>
-                                <i class="fas fa-exchange-alt"></i>
-                                Disk I/O Speed
-                            </h3>
-                        </div>
-                        
-                        <div class="metric-value">
-                            <span id="disk-io-value">0</span><span class="unit">MB/s</span>
-                        </div>
-                        
-                        <div class="chart-container">
-                            <canvas id="disk-io-chart"></canvas>
-                        </div>
-                        
-                        <div class="metric-details">
                             <div class="detail-item">
-                                <span>Read</span>
-                                <span id="disk-read-speed">0 MB/s</span>
-                            </div>
-                            <div class="detail-item">
-                                <span>Write</span>
-                                <span id="disk-write-speed">0 MB/s</span>
+                                <span>Free</span>
+                                <span id="disk-free">0 GB</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Network Speed Card (ENHANCED) -->
+                    <!-- Network Activity Card (SIMPLIFIED) -->
                     <div class="metric-card network-card">
                         <div class="metric-header">
                             <h3>
                                 <i class="fas fa-network-wired"></i>
-                                Network Speed
+                                Network Activity
                             </h3>
                         </div>
                         
@@ -207,36 +202,81 @@
                         <div class="metric-details">
                             <div class="detail-item">
                                 <span>Upload</span>
-                                <span id="network-upload-speed">0 Mbps</span>
+                                <span id="network-sent">↑ 0 Mbps</span>
                             </div>
                             <div class="detail-item">
                                 <span>Download</span>
-                                <span id="network-download-speed">0 Mbps</span>
+                                <span id="network-received">↓ 0 Mbps</span>
+                            </div>
+                            <div class="detail-item">
+                                <span>Errors</span>
+                                <span id="network-errors">0</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Legacy Network Activity Card (HIDDEN - for backward compatibility) -->
-                    <div class="metric-card network-legacy-card" style="display: none;">
+                    <!-- System Temperature Card (NEW) -->
+                    <div class="metric-card temperature-card">
                         <div class="metric-header">
                             <h3>
-                                <i class="fas fa-network-wired"></i>
-                                Network Activity
+                                <i class="fas fa-thermometer-half"></i>
+                                System Temp
                             </h3>
                         </div>
                         
                         <div class="metric-value">
-                            <span id="network-legacy-value">0</span><span class="unit">MB</span>
+                            <span id="temperature-value">0</span><span class="unit">°C</span>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <canvas id="temperature-chart"></canvas>
                         </div>
                         
                         <div class="metric-details">
                             <div class="detail-item">
-                                <span>Sent</span>
-                                <span id="network-sent">0 MB</span>
+                                <span>CPU Temp</span>
+                                <span id="cpu-temperature">0°C</span>
                             </div>
                             <div class="detail-item">
-                                <span>Received</span>
-                                <span id="network-received">0 MB</span>
+                                <span>Status</span>
+                                <span id="temperature-status">Normal</span>
+                            </div>
+                            <div class="detail-item">
+                                <span>Max Safe</span>
+                                <span id="temperature-max">85°C</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Process Activity Card (NEW) -->
+                    <div class="metric-card process-card">
+                        <div class="metric-header">
+                            <h3>
+                                <i class="fas fa-tasks"></i>
+                                Process Activity
+                            </h3>
+                        </div>
+                        
+                        <div class="metric-value">
+                            <span id="process-value">0</span><span class="unit"></span>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <canvas id="process-chart"></canvas>
+                        </div>
+                        
+                        <div class="metric-details">
+                            <div class="detail-item">
+                                <span>Running</span>
+                                <span id="process-running">0</span>
+                            </div>
+                            <div class="detail-item">
+                                <span>Sleeping</span>
+                                <span id="process-sleeping">0</span>
+                            </div>
+                            <div class="detail-item">
+                                <span>Zombie</span>
+                                <span id="process-zombie">0</span>
                             </div>
                         </div>
                     </div>
@@ -264,9 +304,63 @@
                 </div>
             </section>
 
+            <!-- NEW: Speed Trends Section -->
+            <section class="speed-trends-section">
+                <div class="section-header">
+                    <h2>
+                        <i class="fas fa-tachometer-alt"></i>
+                        Speed Monitoring
+                    </h2>
+                </div>
+                
+                <div class="speed-charts-grid">
+                    <!-- Disk I/O Speed Chart -->
+                    <div class="speed-chart-card">
+                        <h3>
+                            <i class="fas fa-exchange-alt"></i>
+                            Disk I/O Speed
+                        </h3>
+                        <div class="speed-chart-container">
+                            <canvas id="disk-io-speed-chart"></canvas>
+                        </div>
+                        <div class="speed-legend">
+                            <div class="legend-item">
+                                <div class="legend-color read-color"></div>
+                                <span>Read: <span id="disk-read-speed">0 MB/s</span></span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color write-color"></div>
+                                <span>Write: <span id="disk-write-speed">0 MB/s</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Network Speed Chart -->
+                    <div class="speed-chart-card">
+                        <h3>
+                            <i class="fas fa-wifi"></i>
+                            Network Speed
+                        </h3>
+                        <div class="speed-chart-container">
+                            <canvas id="network-speed-chart"></canvas>
+                        </div>
+                        <div class="speed-legend">
+                            <div class="legend-item">
+                                <div class="legend-color upload-color"></div>
+                                <span>Upload: <span id="network-upload-speed">0 Mbps</span></span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color download-color"></div>
+                                <span>Download: <span id="network-download-speed">0 Mbps</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Quick Stats and System Info -->
             <div class="info-grid">
-                <!-- Quick Stats Card -->
+                <!-- Quick Stats Card (ENHANCED) -->
                 <div class="info-card">
                     <h3>
                         <i class="fas fa-chart-pie"></i>
@@ -286,17 +380,27 @@
                         
                         <div class="stat-item">
                             <div class="stat-value" id="avg-cpu">0%</div>
-                            <div class="stat-label">Avg CPU</div>
+                            <div class="stat-label">Avg CPU (2m)</div>
                         </div>
                         
                         <div class="stat-item">
                             <div class="stat-value" id="avg-memory">0%</div>
-                            <div class="stat-label">Avg Memory</div>
+                            <div class="stat-label">Avg Memory (2m)</div>
+                        </div>
+
+                        <div class="stat-item">
+                            <div class="stat-value" id="avg-disk-io">0</div>
+                            <div class="stat-label">Avg Disk I/O (2m)</div>
+                        </div>
+                        
+                        <div class="stat-item">
+                            <div class="stat-value" id="avg-network">0</div>
+                            <div class="stat-label">Avg Network (2m)</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- System Information Card -->
+                <!-- System Information Card (ENHANCED) -->
                 <div class="info-card">
                     <h3>
                         <i class="fas fa-server"></i>
@@ -323,6 +427,11 @@
                             <span>Uptime</span>
                             <span id="system-uptime">Loading...</span>
                         </div>
+
+                        <div class="detail-row">
+                            <span>Logged Users</span>
+                            <span id="logged-users">0</span>
+                        </div>
                         
                         <div class="detail-row">
                             <span>Last Update</span>
@@ -331,7 +440,7 @@
                     </div>
                 </div>
 
-                <!-- System Status Card -->
+                <!-- System Status Card (ENHANCED) -->
                 <div class="info-card">
                     <h3>
                         <i class="fas fa-heartbeat"></i>
@@ -344,6 +453,24 @@
                             <div class="status-item-left">
                                 <div class="status-badge"></div>
                                 <span>Loading system status...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NEW: Top Processes Card -->
+                <div class="info-card">
+                    <h3>
+                        <i class="fas fa-list-alt"></i>
+                        Top Processes
+                    </h3>
+                    
+                    <div id="top-processes" class="processes-list">
+                        <!-- Dynamic content will be inserted here -->
+                        <div class="process-item">
+                            <div class="process-info">
+                                <span class="process-name">Loading...</span>
+                                <span class="process-cpu">0%</span>
                             </div>
                         </div>
                     </div>
@@ -373,6 +500,604 @@
     </button>
 
     <!-- JavaScript Files -->
+    <!-- Updated CSS -->
+    <style>
+/* ==========================================================================
+   NEW SPEED TRENDS SECTION STYLES
+   ========================================================================== */
+
+.speed-trends-section {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.speed-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-lg);
+}
+
+.speed-chart-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-lg);
+  transition: var(--transition-normal);
+}
+
+.speed-chart-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow);
+}
+
+.speed-chart-card h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: var(--spacing-md);
+  color: var(--text-primary);
+}
+
+.speed-chart-container {
+  height: 250px;
+  margin-bottom: var(--spacing-md);
+  position: relative;
+}
+
+.speed-chart-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.speed-legend {
+  display: flex;
+  justify-content: space-around;
+  gap: var(--spacing-md);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.read-color { background: #e74c3c; }
+.write-color { background: #ffa726; }
+.upload-color { background: #ffa726; }
+.download-color { background: #5b6fee; }
+
+.speed-metrics-summary {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: center;
+}
+
+.speed-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+}
+
+.speed-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.speed-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+/* ==========================================================================
+   ENHANCED METRIC CARDS (6-GRID LAYOUT)
+   ========================================================================== */
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-2xl);
+}
+
+/* Ensure cards maintain consistent height */
+.metric-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-lg);
+  transition: var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+  min-height: 280px; /* Fixed minimum height */
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-bottom: var(--spacing-md);
+}
+
+.chart-container {
+  height: 120px;
+  margin-bottom: var(--spacing-md);
+  position: relative;
+  flex: 1;
+}
+
+.metric-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: var(--spacing-sm);
+  margin-top: auto; /* Push to bottom */
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* Enhanced card-specific colors */
+.cpu-card .metric-header i { color: #ff6b6b; }
+.memory-card .metric-header i { color: #4ecdc4; }
+.disk-card .metric-header i { color: #ffa726; }
+.network-card .metric-header i { color: #ab47bc; }
+.temperature-card .metric-header i { color: #e74c3c; }
+.process-card .metric-header i { color: #9c27b0; }
+
+/* ==========================================================================
+   ENHANCED INFO GRID (RESPONSIVE 2-COLUMN LAYOUT)
+   ========================================================================== */
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  gap: var(--spacing-xl);
+  margin-top: var(--spacing-xl);
+}
+
+.info-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-xl);
+  transition: var(--transition-normal);
+  height: fit-content;
+}
+
+.info-card:hover {
+  border-color: var(--color-primary);
+  background: var(--bg-card-hover);
+}
+
+.info-card h3 {
+  color: var(--color-primary);
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: var(--spacing-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-md);
+}
+
+.stat-item {
+  background: var(--bg-tertiary);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  border: 1px solid var(--border-secondary);
+  transition: var(--transition-normal);
+}
+
+.stat-item:hover {
+  border-color: var(--color-primary);
+  background: var(--bg-card-hover);
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  margin-bottom: var(--spacing-xs);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.details-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--border-secondary);
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row span:first-child {
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.detail-row span:last-child {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: right;
+  max-width: 60%;
+  word-break: break-word;
+}
+
+.status-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-secondary);
+  transition: var(--transition-normal);
+}
+
+.status-item:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--color-primary);
+}
+
+.status-item-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex: 1;
+  min-width: 0; /* Allow text truncation */
+}
+
+.status-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0; /* Allow text truncation */
+  flex: 1;
+}
+
+.status-hostname {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-metrics {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.status-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.status-badge {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex-shrink: 0;
+}
+
+.status-badge.warning {
+  background: var(--color-warning);
+}
+
+.status-badge.error {
+  background: var(--color-error);
+}
+
+.status-badge.offline {
+  background: var(--color-error);
+}
+
+.status-badge-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-success);
+  background: rgba(34, 197, 94, 0.1);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.status-badge-text.warning {
+  color: var(--color-warning);
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.status-badge-text.error,
+.status-badge-text.offline {
+  color: var(--color-error);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ==========================================================================
+   TOP PROCESSES STYLES
+   ========================================================================== */
+
+.processes-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.process-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-fast);
+}
+
+.process-item:hover {
+  background: var(--bg-card-hover);
+}
+
+.process-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.process-name {
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 0.85rem;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.process-cpu {
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.8rem;
+  min-width: 40px;
+  text-align: right;
+}
+
+/* ==========================================================================
+   RESPONSIVE DESIGN IMPROVEMENTS
+   ========================================================================== */
+
+@media (max-width: 1400px) {
+  .metrics-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .speed-charts-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+}
+
+@media (max-width: 1200px) {
+  .dashboard-main {
+    padding: var(--spacing-lg);
+  }
+  
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+  
+  .metric-card {
+    padding: var(--spacing-md);
+    min-height: 250px;
+  }
+  
+  .metric-details {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-lg);
+    margin-top: var(--spacing-lg);
+  }
+  
+  .info-card {
+    padding: var(--spacing-lg);
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+  
+  .stat-item {
+    padding: var(--spacing-sm);
+  }
+  
+  .stat-value {
+    font-size: 1.25rem;
+  }
+  
+  .detail-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) 0;
+  }
+  
+  .detail-row span:last-child {
+    max-width: 100%;
+    text-align: left;
+  }
+  
+  .speed-metrics-summary {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+  
+  /* System Status mobile improvements */
+  .status-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+  }
+  
+  .status-item-left {
+    width: 100%;
+  }
+  
+  .status-content {
+    width: 100%;
+  }
+  
+  .status-metrics {
+    word-break: break-all;
+    line-height: 1.4;
+  }
+  
+  .status-badge-text {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .metric-value {
+    font-size: 1.5rem;
+  }
+  
+  .chart-container {
+    height: 100px;
+  }
+  
+  .metric-details {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-xs);
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
+   CHART STABILITY FIXES
+   ========================================================================== */
+
+.chart-container, .speed-chart-container, .trends-chart-container {
+  position: relative;
+  overflow: hidden; /* Prevent overflow during animations */
+}
+
+.chart-container canvas, 
+.speed-chart-container canvas, 
+.trends-chart-container canvas {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+/* Prevent text overflow in detail items */
+.detail-item span:last-child {
+  word-break: break-word;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+
+/* Scrollbar styling for processes list */
+.processes-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.processes-list::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+.processes-list::-webkit-scrollbar-thumb {
+  background: var(--border-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.processes-list::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-color);
+}
+    </style>
+
     <script src="/static/js/websocket-client.js"></script>
     <script src="/static/js/chart-manager.js"></script>
     <script src="/static/js/dashboard.js"></script>
@@ -384,19 +1109,19 @@
 
         // Initialize dashboard when DOM is ready
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 Initializing GoDash Dashboard with Speed Support...');
+            console.log('🚀 Initializing Enhanced GoDash Dashboard...');
             
             try {
                 dashboard = new DashboardApp({
                     debug: window.location.hostname === 'localhost',
-                    updateInterval: 500, // 500ms for ultra real-time updates
+                    updateInterval: 1000, // Reduced to 1 second for better UX
                     chartUpdateAnimation: true,
                     alertTimeout: 5000
                 });
 
                 // Initialize the dashboard
                 dashboard.initialize().then(() => {
-                    console.log('✅ Dashboard initialization completed with speed support');
+                    console.log('✅ Enhanced Dashboard initialization completed');
                 }).catch(error => {
                     console.error('❌ Dashboard initialization failed:', error);
                 });

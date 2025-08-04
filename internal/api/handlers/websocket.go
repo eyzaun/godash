@@ -60,9 +60,10 @@ type DetailedMetricsWebSocketResponse struct {
 	Timestamp     string  `json:"timestamp"`
 
 	// Detailed CPU info (frontend'in detail alanları için)
-	CPUCores     int       `json:"cpu_cores"`
-	CPUFrequency float64   `json:"cpu_frequency"`
-	CPULoadAvg   []float64 `json:"cpu_load_avg"`
+	CPUCores       int       `json:"cpu_cores"`
+	CPUFrequency   float64   `json:"cpu_frequency"`
+	CPULoadAvg     []float64 `json:"cpu_load_avg"`
+	CPUTemperature float64   `json:"cpu_temperature_c"`
 
 	// Detailed Memory info
 	MemoryTotal     uint64 `json:"memory_total"`
@@ -81,6 +82,8 @@ type DetailedMetricsWebSocketResponse struct {
 	// NEW: Disk I/O Speed
 	DiskReadSpeed  float64 `json:"disk_read_speed_mbps"`
 	DiskWriteSpeed float64 `json:"disk_write_speed_mbps"`
+	// NEW: Individual disk partitions
+	DiskPartitions []models.PartitionInfo `json:"disk_partitions"`
 
 	// Network info (SPEED FIELDS ADDED)
 	NetworkSent     uint64 `json:"network_sent"`
@@ -95,6 +98,9 @@ type DetailedMetricsWebSocketResponse struct {
 	Platform     string        `json:"platform"`
 	Uptime       time.Duration `json:"uptime"`
 	ProcessCount uint64        `json:"process_count"`
+
+	// Process Activity
+	Processes *models.ProcessActivity `json:"processes"`
 }
 
 // WebSocket upgrader with proper configuration
@@ -201,9 +207,10 @@ func (h *WebSocketHandler) BroadcastMetrics(metrics *models.SystemMetrics) {
 		Timestamp:     metrics.Timestamp.Format(time.RFC3339),
 
 		// Detailed CPU info (frontend'in detail alanları için)
-		CPUCores:     metrics.CPU.Cores,
-		CPUFrequency: metrics.CPU.Frequency,
-		CPULoadAvg:   metrics.CPU.LoadAvg,
+		CPUCores:       metrics.CPU.Cores,
+		CPUFrequency:   metrics.CPU.Frequency,
+		CPULoadAvg:     metrics.CPU.LoadAvg,
+		CPUTemperature: metrics.CPU.Temperature,
 
 		// Detailed Memory info
 		MemoryTotal:     metrics.Memory.Total,
@@ -222,6 +229,8 @@ func (h *WebSocketHandler) BroadcastMetrics(metrics *models.SystemMetrics) {
 		// NEW: Disk I/O Speed
 		DiskReadSpeed:  metrics.Disk.ReadSpeed,
 		DiskWriteSpeed: metrics.Disk.WriteSpeed,
+		// NEW: Individual disk partitions
+		DiskPartitions: metrics.Disk.Partitions,
 
 		// Network info (SPEED FIELDS ADDED)
 		NetworkSent:     metrics.Network.TotalSent,
@@ -248,6 +257,9 @@ func (h *WebSocketHandler) BroadcastMetrics(metrics *models.SystemMetrics) {
 		detailedMetrics.Platform = systemInfo.Platform
 		detailedMetrics.ProcessCount = systemInfo.Processes
 	}
+
+	// Add process activity data
+	detailedMetrics.Processes = &metrics.Processes
 
 	message := WebSocketMessage{
 		Type:      "metrics",

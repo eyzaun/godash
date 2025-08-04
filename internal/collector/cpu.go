@@ -2,11 +2,15 @@ package collector
 
 import (
 	"fmt"
+	"os"
 	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/eyzaun/godash/internal/models"
 	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/load"
 )
 
@@ -77,12 +81,20 @@ func (c *CPUCollector) GetCPUMetrics() (*models.CPUMetrics, error) {
 		frequency = cpuInfo[0].Mhz
 	}
 
+	// Get CPU temperature
+	temperature, err := c.GetCPUTemperature()
+	if err != nil {
+		// Temperature might not be available on all systems, use 0 as default
+		temperature = 0
+	}
+
 	return &models.CPUMetrics{
-		Usage:     usage,
-		Cores:     logicalCount,
-		CoreUsage: perCoreUsage,
-		LoadAvg:   loadAvg,
-		Frequency: frequency,
+		Usage:       usage,
+		Cores:       logicalCount,
+		CoreUsage:   perCoreUsage,
+		LoadAvg:     loadAvg,
+		Frequency:   frequency,
+		Temperature: temperature,
 	}, nil
 }
 
@@ -192,11 +204,109 @@ func (c *CPUCollector) getLoadAverage() ([]float64, error) {
 	return []float64{avg.Load1, avg.Load5, avg.Load15}, nil
 }
 
-// GetCPUTemperature gets CPU temperature (if available)
+// GetCPUTemperature gets CPU temperature (platform-specific)
 func (c *CPUCollector) GetCPUTemperature() (float64, error) {
-	// This is platform-specific and might not be available
-	// For now, return 0 as temperature monitoring requires platform-specific implementations
-	return 0, fmt.Errorf("CPU temperature monitoring not implemented")
+	// Try to get CPU temperature from different sources
+
+	// Windows: Use WMI
+	if runtime.GOOS == "windows" {
+		return c.getCPUTemperatureWindows()
+	}
+
+	// Linux: Use thermal zones
+	if runtime.GOOS == "linux" {
+		return c.getCPUTemperatureLinux()
+	}
+
+	// macOS: Use sysctl
+	if runtime.GOOS == "darwin" {
+		return c.getCPUTemperatureDarwin()
+	}
+
+	return 0, fmt.Errorf("CPU temperature monitoring not supported on %s", runtime.GOOS)
+}
+
+// getCPUTemperatureWindows gets temperature on Windows using WMI
+func (c *CPUCollector) getCPUTemperatureWindows() (float64, error) {
+	// Use gopsutil to get temperature from thermal sensors
+	temps, err := host.SensorsTemperatures()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get temperature sensors: %w", err)
+	}
+
+	// Find CPU temperature sensor
+	for _, temp := range temps {
+		// Look for common CPU temperature sensor names
+		sensorName := strings.ToLower(temp.SensorKey)
+		if strings.Contains(sensorName, "cpu") ||
+			strings.Contains(sensorName, "core") ||
+			strings.Contains(sensorName, "package") ||
+			strings.Contains(sensorName, "processor") {
+			if temp.Temperature > 0 && temp.Temperature < 120 { // Reasonable range
+				return temp.Temperature, nil
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("no CPU temperature sensor found")
+}
+
+// getCPUTemperatureLinux gets temperature on Linux
+func (c *CPUCollector) getCPUTemperatureLinux() (float64, error) {
+	// Try thermal zones first
+	temps, err := host.SensorsTemperatures()
+	if err == nil {
+		for _, temp := range temps {
+			sensorName := strings.ToLower(temp.SensorKey)
+			if strings.Contains(sensorName, "cpu") ||
+				strings.Contains(sensorName, "core") ||
+				strings.Contains(sensorName, "package") {
+				if temp.Temperature > 0 && temp.Temperature < 120 {
+					return temp.Temperature, nil
+				}
+			}
+		}
+	}
+
+	// Fallback: try reading from /sys/class/thermal/
+	thermalFiles := []string{
+		"/sys/class/thermal/thermal_zone0/temp",
+		"/sys/class/thermal/thermal_zone1/temp",
+		"/sys/class/thermal/thermal_zone2/temp",
+	}
+
+	for _, file := range thermalFiles {
+		if data, err := os.ReadFile(file); err == nil {
+			if temp, err := strconv.ParseFloat(strings.TrimSpace(string(data)), 64); err == nil {
+				// Temperature is in millidegrees Celsius
+				tempC := temp / 1000.0
+				if tempC > 0 && tempC < 120 {
+					return tempC, nil
+				}
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("no CPU temperature found")
+}
+
+// getCPUTemperatureDarwin gets temperature on macOS
+func (c *CPUCollector) getCPUTemperatureDarwin() (float64, error) {
+	temps, err := host.SensorsTemperatures()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get temperature sensors: %w", err)
+	}
+
+	for _, temp := range temps {
+		sensorName := strings.ToLower(temp.SensorKey)
+		if strings.Contains(sensorName, "cpu") || strings.Contains(sensorName, "core") {
+			if temp.Temperature > 0 && temp.Temperature < 120 {
+				return temp.Temperature, nil
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("no CPU temperature sensor found")
 }
 
 // GetCPUInfo gets detailed CPU information

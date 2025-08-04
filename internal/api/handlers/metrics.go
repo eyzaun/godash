@@ -60,9 +60,10 @@ type DetailedMetricsResponse struct {
 	Timestamp     string  `json:"timestamp"`
 
 	// Detailed CPU info
-	CPUCores     int       `json:"cpu_cores"`
-	CPUFrequency float64   `json:"cpu_frequency"`
-	CPULoadAvg   []float64 `json:"cpu_load_avg"`
+	CPUCores       int       `json:"cpu_cores"`
+	CPUFrequency   float64   `json:"cpu_frequency"`
+	CPULoadAvg     []float64 `json:"cpu_load_avg"`
+	CPUTemperature float64   `json:"cpu_temperature_c"`
 
 	// Detailed Memory info
 	MemoryTotal     uint64 `json:"memory_total"`
@@ -79,6 +80,8 @@ type DetailedMetricsResponse struct {
 	// NEW: Disk I/O Speed
 	DiskReadSpeed  float64 `json:"disk_read_speed_mbps"`
 	DiskWriteSpeed float64 `json:"disk_write_speed_mbps"`
+	// NEW: Individual disk partitions
+	DiskPartitions []models.PartitionInfo `json:"disk_partitions"`
 
 	// Network info
 	NetworkSent     uint64 `json:"network_sent"`
@@ -86,6 +89,9 @@ type DetailedMetricsResponse struct {
 	// NEW: Network Speed
 	NetworkUploadSpeed   float64 `json:"network_upload_speed_mbps"`
 	NetworkDownloadSpeed float64 `json:"network_download_speed_mbps"`
+
+	// Process info
+	Processes *models.ProcessActivity `json:"processes"`
 }
 
 // GetCurrentMetrics gets the latest metrics from system collector (REAL-TIME)
@@ -119,9 +125,10 @@ func (h *MetricsHandler) GetCurrentMetrics(c *gin.Context) {
 		Timestamp:     systemMetrics.Timestamp.Format(time.RFC3339),
 
 		// Detailed CPU info
-		CPUCores:     systemMetrics.CPU.Cores,
-		CPUFrequency: systemMetrics.CPU.Frequency,
-		CPULoadAvg:   systemMetrics.CPU.LoadAvg,
+		CPUCores:       systemMetrics.CPU.Cores,
+		CPUFrequency:   systemMetrics.CPU.Frequency,
+		CPULoadAvg:     systemMetrics.CPU.LoadAvg,
+		CPUTemperature: systemMetrics.CPU.Temperature,
 
 		// Detailed Memory info
 		MemoryTotal:     systemMetrics.Memory.Total,
@@ -138,6 +145,8 @@ func (h *MetricsHandler) GetCurrentMetrics(c *gin.Context) {
 		// NEW: Disk I/O Speed
 		DiskReadSpeed:  systemMetrics.Disk.ReadSpeed,
 		DiskWriteSpeed: systemMetrics.Disk.WriteSpeed,
+		// NEW: Individual disk partitions
+		DiskPartitions: systemMetrics.Disk.Partitions,
 
 		// Network info (SPEED FIELDS ADDED)
 		NetworkSent:     systemMetrics.Network.TotalSent,
@@ -145,6 +154,9 @@ func (h *MetricsHandler) GetCurrentMetrics(c *gin.Context) {
 		// NEW: Network Speed
 		NetworkUploadSpeed:   systemMetrics.Network.UploadSpeed,
 		NetworkDownloadSpeed: systemMetrics.Network.DownloadSpeed,
+
+		// Process info
+		Processes: &systemMetrics.Processes,
 	}
 
 	c.JSON(http.StatusOK, APIResponse{

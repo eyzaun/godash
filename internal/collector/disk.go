@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/eyzaun/godash/internal/models"
+	"github.com/shirou/gopsutil/v3/disk"
 )
 
 // DiskCollector handles disk metrics collection
@@ -18,10 +18,13 @@ type DiskCollector struct {
 
 // NewDiskCollector creates a new disk collector
 func NewDiskCollector() *DiskCollector {
-	// Default filesystems to exclude
+	// Default filesystems to exclude - more comprehensive list
 	excludeFS := []string{
 		"tmpfs", "devtmpfs", "sysfs", "proc", "devfs", "fdescfs",
-		"overlay", "squashfs", "iso9660", "udf", "fuse",
+		"overlay", "squashfs", "iso9660", "udf", "fuse", "cgroup",
+		"cgroup2", "configfs", "debugfs", "mqueue", "pstore", "tracefs",
+		"binfmt_misc", "autofs", "rpc_pipefs", "nfsd", "bpf", "ramfs",
+		"hugetlbfs", "securityfs", "efivarfs", "fusectl", "selinuxfs",
 	}
 
 	return &DiskCollector{
@@ -31,10 +34,10 @@ func NewDiskCollector() *DiskCollector {
 	}
 }
 
-// GetDiskMetrics collects disk usage metrics
+// GetDiskMetrics collects disk usage metrics with separate partition data
 func (d *DiskCollector) GetDiskMetrics() (*models.DiskMetrics, error) {
 	// Get all partitions
-	partitions, err := disk.Partitions(true) // Include all partitions
+	partitions, err := disk.Partitions(false) // Only get mounted partitions
 	if err != nil {
 		return nil, fmt.Errorf("failed to get disk partitions: %w", err)
 	}
@@ -49,10 +52,16 @@ func (d *DiskCollector) GetDiskMetrics() (*models.DiskMetrics, error) {
 			continue
 		}
 
+		// Skip network drives and other virtual mounts on Windows
+		if d.shouldExcludeMountpoint(partition.Mountpoint) {
+			continue
+		}
+
 		// Get usage for this partition
 		usage, err := disk.Usage(partition.Mountpoint)
 		if err != nil {
-			// Skip partitions we can't access
+			// Log error but continue with other partitions
+			fmt.Printf("Warning: Cannot access partition %s: %v\n", partition.Mountpoint, err)
 			continue
 		}
 
@@ -69,7 +78,7 @@ func (d *DiskCollector) GetDiskMetrics() (*models.DiskMetrics, error) {
 		// Calculate partition usage percentage
 		partitionPercent := float64(usage.Used) / float64(usage.Total) * 100
 
-		// Add partition info
+		// Add partition info with more detailed information
 		partitionInfos = append(partitionInfos, models.PartitionInfo{
 			Device:     partition.Device,
 			Mountpoint: partition.Mountpoint,
@@ -79,6 +88,12 @@ func (d *DiskCollector) GetDiskMetrics() (*models.DiskMetrics, error) {
 			Free:       usage.Free,
 			Percent:    partitionPercent,
 		})
+
+		fmt.Printf("Found partition: %s (%s) - %s - Total: %.2f GB, Used: %.2f GB (%.1f%%)\n",
+			partition.Device, partition.Mountpoint, partition.Fstype,
+			float64(usage.Total)/(1024*1024*1024),
+			float64(usage.Used)/(1024*1024*1024),
+			partitionPercent)
 	}
 
 	// Calculate overall usage percentage
@@ -148,20 +163,49 @@ func (d *DiskCollector) shouldExcludeFilesystem(fstype string) bool {
 	return false
 }
 
+// shouldExcludeMountpoint checks if a mountpoint should be excluded
+func (d *DiskCollector) shouldExcludeMountpoint(mountpoint string) bool {
+	// Windows specific exclusions
+	excludeMounts := []string{
+		"\\\\",         // Network drives
+		"A:\\", "B:\\", // Floppy drives
+	}
+
+	for _, excludeMount := range excludeMounts {
+		if strings.HasPrefix(mountpoint, excludeMount) {
+			return true
+		}
+	}
+
+	// Linux/Unix specific exclusions
+	linuxExcludes := []string{
+		"/dev", "/proc", "/sys", "/run", "/tmp",
+		"/snap", "/boot/efi",
+	}
+
+	for _, excludeMount := range linuxExcludes {
+		if mountpoint == excludeMount || strings.HasPrefix(mountpoint, excludeMount+"/") {
+			return true
+		}
+	}
+
+	return false
+}
+
 // shouldExcludeDevice checks if a device should be excluded from I/O stats
 func (d *DiskCollector) shouldExcludeDevice(deviceName string) bool {
 	deviceName = strings.ToLower(deviceName)
-	
+
 	// Exclude loop devices (Linux)
 	if strings.HasPrefix(deviceName, "loop") {
 		return true
 	}
-	
+
 	// Exclude RAM disks
 	if strings.HasPrefix(deviceName, "ram") {
 		return true
 	}
-	
+
 	// Exclude other virtual devices
 	virtualDevices := []string{"dm-", "md", "sr", "fd"}
 	for _, vdev := range virtualDevices {
@@ -169,7 +213,7 @@ func (d *DiskCollector) shouldExcludeDevice(deviceName string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -194,13 +238,13 @@ func (d *DiskCollector) FormatBytes(bytes uint64) string {
 	if bytes < unit {
 		return fmt.Sprintf("%d B", bytes)
 	}
-	
+
 	div, exp := uint64(unit), 0
 	for n := bytes / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
-	
+
 	units := []string{"KB", "MB", "GB", "TB", "PB", "EB"}
 	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), units[exp])
 }
@@ -232,13 +276,13 @@ func (d *DiskCollector) GetDiskHealth() (*DiskHealthInfo, error) {
 	// Check individual partitions
 	for _, partition := range metrics.Partitions {
 		if partition.Percent > 95 {
-			health.Critical = append(health.Critical, 
-				fmt.Sprintf("Partition %s usage above 95%% (%.1f%%)", 
+			health.Critical = append(health.Critical,
+				fmt.Sprintf("Partition %s usage above 95%% (%.1f%%)",
 					partition.Mountpoint, partition.Percent))
 			health.OverallHealth = "critical"
 		} else if partition.Percent > 85 {
-			health.Warnings = append(health.Warnings, 
-				fmt.Sprintf("Partition %s usage above 85%% (%.1f%%)", 
+			health.Warnings = append(health.Warnings,
+				fmt.Sprintf("Partition %s usage above 85%% (%.1f%%)",
 					partition.Mountpoint, partition.Percent))
 			if health.OverallHealth == "healthy" {
 				health.OverallHealth = "warning"
@@ -247,8 +291,8 @@ func (d *DiskCollector) GetDiskHealth() (*DiskHealthInfo, error) {
 
 		// Check for very low free space
 		if partition.Free < 1024*1024*1024 { // Less than 1GB free
-			health.Warnings = append(health.Warnings, 
-				fmt.Sprintf("Partition %s has less than 1GB free space", 
+			health.Warnings = append(health.Warnings,
+				fmt.Sprintf("Partition %s has less than 1GB free space",
 					partition.Mountpoint))
 			if health.OverallHealth == "healthy" {
 				health.OverallHealth = "warning"
@@ -351,10 +395,10 @@ func (d *DiskCollector) IsDiskSpaceLow(threshold float64) (bool, []string, error
 	}
 
 	var lowSpacePartitions []string
-	
+
 	for _, partition := range metrics.Partitions {
 		if partition.Percent > threshold {
-			lowSpacePartitions = append(lowSpacePartitions, 
+			lowSpacePartitions = append(lowSpacePartitions,
 				fmt.Sprintf("%s (%.1f%%)", partition.Mountpoint, partition.Percent))
 		}
 	}

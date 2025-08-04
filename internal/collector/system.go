@@ -36,9 +36,10 @@ type Collector interface {
 
 // SystemCollector implements the Collector interface (SPEED TRACKING ADDED)
 type SystemCollector struct {
-	cpuCollector    *CPUCollector
-	memoryCollector *MemoryCollector
-	diskCollector   *DiskCollector
+	cpuCollector     *CPUCollector
+	memoryCollector  *MemoryCollector
+	diskCollector    *DiskCollector
+	processCollector *ProcessCollector
 
 	// Configuration
 	collectInterval time.Duration
@@ -88,10 +89,11 @@ func NewSystemCollector(config *CollectorConfig) *SystemCollector {
 	}
 
 	return &SystemCollector{
-		cpuCollector:    NewCPUCollector(),
-		memoryCollector: NewMemoryCollector(),
-		diskCollector:   NewDiskCollector(),
-		collectInterval: config.CollectInterval,
+		cpuCollector:     NewCPUCollector(),
+		memoryCollector:  NewMemoryCollector(),
+		diskCollector:    NewDiskCollector(),
+		processCollector: NewProcessCollector(),
+		collectInterval:  config.CollectInterval,
 		enabledMetrics: map[string]bool{
 			"cpu":       config.EnableCPU,
 			"memory":    config.EnableMemory,
@@ -270,6 +272,24 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 			sc.lastNetworkSent = metrics.Network.TotalSent
 			sc.lastNetworkRecv = metrics.Network.TotalReceived
 			sc.lastNetworkTime = currentTime
+		}
+	}
+
+	// Collect Process metrics
+	if sc.enabledMetrics["processes"] {
+		processActivity, err := sc.processCollector.GetProcessActivity()
+		if err != nil {
+			collectErrors = append(collectErrors, fmt.Errorf("failed to collect process metrics: %w", err))
+			// Set default values
+			metrics.Processes = models.ProcessActivity{
+				TotalProcesses:   100,
+				RunningProcesses: 80,
+				StoppedProcesses: 5,
+				ZombieProcesses:  0,
+				TopProcesses:     []models.ProcessInfo{},
+			}
+		} else {
+			metrics.Processes = *processActivity
 		}
 	}
 

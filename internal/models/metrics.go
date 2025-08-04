@@ -8,22 +8,33 @@ import (
 
 // SystemMetrics represents the complete system metrics at a point in time
 type SystemMetrics struct {
-	CPU       CPUMetrics     `json:"cpu"`
-	Memory    MemoryMetrics  `json:"memory"`
-	Disk      DiskMetrics    `json:"disk"`
-	Network   NetworkMetrics `json:"network"`
-	Timestamp time.Time      `json:"timestamp"`
-	Hostname  string         `json:"hostname"`
-	Uptime    time.Duration  `json:"uptime"`
+	CPU       CPUMetrics      `json:"cpu"`
+	Memory    MemoryMetrics   `json:"memory"`
+	Disk      DiskMetrics     `json:"disk"`
+	Network   NetworkMetrics  `json:"network"`
+	Processes ProcessActivity `json:"processes"`
+	Timestamp time.Time       `json:"timestamp"`
+	Hostname  string          `json:"hostname"`
+	Uptime    time.Duration   `json:"uptime"`
 }
 
 // CPUMetrics represents CPU usage information
 type CPUMetrics struct {
-	Usage     float64   `json:"usage_percent"` // Overall CPU usage percentage
-	Cores     int       `json:"cores"`         // Number of CPU cores
-	CoreUsage []float64 `json:"core_usage"`    // Per-core usage percentages
-	LoadAvg   []float64 `json:"load_average"`  // 1, 5, 15 minute load averages
-	Frequency float64   `json:"frequency_mhz"` // CPU frequency in MHz
+	Usage       float64   `json:"usage_percent"` // Overall CPU usage percentage
+	Cores       int       `json:"cores"`         // Number of CPU cores
+	CoreUsage   []float64 `json:"core_usage"`    // Per-core usage percentages
+	LoadAvg     []float64 `json:"load_average"`  // 1, 5, 15 minute load averages
+	Frequency   float64   `json:"frequency_mhz"` // CPU frequency in MHz
+	Temperature float64   `json:"temperature_c"` // CPU temperature in Celsius
+}
+
+// ProcessActivity represents process statistics
+type ProcessActivity struct {
+	TotalProcesses   int           `json:"total_processes"`
+	RunningProcesses int           `json:"running_processes"`
+	StoppedProcesses int           `json:"stopped_processes"`
+	ZombieProcesses  int           `json:"zombie_processes"`
+	TopProcesses     []ProcessInfo `json:"top_processes"`
 }
 
 // MemoryMetrics represents memory usage information
