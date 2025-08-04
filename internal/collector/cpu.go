@@ -47,11 +47,6 @@ func (c *CPUCollector) GetCPUMetrics() (*models.CPUMetrics, error) {
 		return nil, fmt.Errorf("failed to get logical CPU count: %w", err)
 	}
 
-	// physicalCount, err := cpu.Counts(false) // physical cores
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to get physical CPU count: %w", err)
-	// }
-
 	// Get CPU usage percentage - use advanced method for better accuracy
 	usage, err := c.getCPUUsageAdvanced()
 	if err != nil {
@@ -309,23 +304,8 @@ func (c *CPUCollector) getCPUTemperatureDarwin() (float64, error) {
 	return 0, fmt.Errorf("no CPU temperature sensor found")
 }
 
-// GetCPUInfo gets detailed CPU information
-func (c *CPUCollector) GetCPUInfo() ([]cpu.InfoStat, error) {
-	return cpu.Info()
-}
-
 // Reset resets the collector state
 func (c *CPUCollector) Reset() {
 	c.lastSample = nil
 	c.sampleCount = 0
-}
-
-// GetSampleCount returns the number of samples collected
-func (c *CPUCollector) GetSampleCount() int {
-	return c.sampleCount
-}
-
-// IsReady checks if the collector has enough samples for accurate measurements
-func (c *CPUCollector) IsReady() bool {
-	return c.sampleCount > 0
 }

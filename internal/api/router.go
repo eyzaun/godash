@@ -105,15 +105,6 @@ func (r *Router) setupRoutes() {
 	// WebSocket endpoint for real-time metrics
 	r.engine.GET("/ws", r.websocketHandler.HandleWebSocket)
 
-	// WebSocket stats endpoint
-	r.engine.GET("/ws/stats", func(c *gin.Context) {
-		stats := r.websocketHandler.GetClientStats()
-		c.JSON(http.StatusOK, handlers.APIResponse{
-			Success: true,
-			Data:    stats,
-		})
-	})
-
 	// API v1 routes
 	v1 := r.engine.Group("/api/v1")
 	{
@@ -128,7 +119,7 @@ func (r *Router) setupRoutes() {
 			metricsGroup.GET("/average/:hostname", r.metricsHandler.GetAverageMetricsByHostname)
 			metricsGroup.GET("/summary", r.metricsHandler.GetMetricsSummary)
 			metricsGroup.GET("/trends/:hostname", r.metricsHandler.GetUsageTrends)
-			metricsGroup.GET("/trends", r.metricsHandler.GetHistoricalTrends) // YENİ ENDPOINT
+			metricsGroup.GET("/trends", r.metricsHandler.GetHistoricalTrends)
 			metricsGroup.GET("/top/:type", r.metricsHandler.GetTopHostsByUsage)
 			metricsGroup.POST("", r.metricsHandler.CreateMetric) // For manual metric insertion
 		}
@@ -176,52 +167,50 @@ func (r *Router) setupRoutes() {
 		}
 	}
 
-	// Static file serving (for web interface)
+	// Static file serving and dashboard routes
 	r.engine.Static("/static", "./web/static")
 	r.engine.LoadHTMLGlob("web/templates/*")
 
-	// Dashboard routes
-	r.engine.GET("/", func(c *gin.Context) {
+	// Single dashboard route (simplified)
+	dashboardHandler := func(c *gin.Context) {
 		c.HTML(http.StatusOK, "dashboard.html", gin.H{
 			"title":   "GoDash System Monitor",
 			"version": "1.0.0",
 		})
-	})
+	}
 
+	r.engine.GET("/", dashboardHandler)
 	r.engine.GET("/dashboard", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "dashboard.html", gin.H{
-			"title":   "GoDash System Monitor",
-			"version": "1.0.0",
-		})
+		// Redirect /dashboard to / for consistency
+		c.Redirect(http.StatusMovedPermanently, "/")
 	})
 
-	// Catch-all route for SPA (Single Page Application)
+	// Simplified NoRoute handler for SPA
 	r.engine.NoRoute(func(c *gin.Context) {
-		// If it's an API route, return 404
-		if len(c.Request.URL.Path) >= 4 && c.Request.URL.Path[:4] == "/api" {
+		path := c.Request.URL.Path
+
+		// Return 404 for API routes
+		if len(path) >= 4 && path[:4] == "/api" {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error":   "Not Found",
 				"message": "The requested endpoint does not exist",
-				"path":    c.Request.URL.Path,
+				"path":    path,
 			})
 			return
 		}
 
-		// If it's a WebSocket route, return 404
-		if len(c.Request.URL.Path) >= 3 && c.Request.URL.Path[:3] == "/ws" {
+		// Return 404 for WebSocket routes
+		if len(path) >= 3 && path[:3] == "/ws" {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error":   "Not Found",
 				"message": "WebSocket endpoint not found",
-				"path":    c.Request.URL.Path,
+				"path":    path,
 			})
 			return
 		}
 
-		// For non-API routes, serve dashboard (SPA)
-		c.HTML(http.StatusOK, "dashboard.html", gin.H{
-			"title":   "GoDash System Monitor",
-			"version": "1.0.0",
-		})
+		// Serve dashboard for all other routes (SPA)
+		dashboardHandler(c)
 	})
 }
 

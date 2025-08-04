@@ -51,7 +51,7 @@ func (p *ProcessCollector) GetProcessActivity() (*models.ProcessActivity, error)
 	}
 
 	// Get top processes by CPU usage
-	topProcesses, err := p.GetTopProcesses(10)
+	topProcesses, err := p.getTopProcesses(10)
 	if err != nil {
 		// Continue with empty top processes if this fails
 		topProcesses = []models.ProcessInfo{}
@@ -66,8 +66,8 @@ func (p *ProcessCollector) GetProcessActivity() (*models.ProcessActivity, error)
 	}, nil
 }
 
-// GetTopProcesses gets top processes by CPU usage
-func (p *ProcessCollector) GetTopProcesses(limit int) ([]models.ProcessInfo, error) {
+// getTopProcesses gets top processes by CPU usage (internal method)
+func (p *ProcessCollector) getTopProcesses(limit int) ([]models.ProcessInfo, error) {
 	pids, err := process.Pids()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get process IDs: %w", err)
@@ -100,7 +100,6 @@ func (p *ProcessCollector) GetTopProcesses(limit int) ([]models.ProcessInfo, err
 		statuses, err := proc.Status()
 		var status string
 		if err != nil {
-			// Can't get status, count as other
 			status = "unknown"
 		} else if len(statuses) > 0 {
 			status = statuses[0]

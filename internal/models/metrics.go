@@ -1,8 +1,6 @@
 package models
 
 import (
-	"encoding/json"
-	"fmt"
 	"time"
 )
 
@@ -59,7 +57,7 @@ type DiskMetrics struct {
 	Percent    float64         `json:"usage_percent"` // Disk usage percentage
 	Partitions []PartitionInfo `json:"partitions"`    // Individual partition info
 	IOStats    DiskIOStats     `json:"io_stats"`      // Disk I/O statistics
-	// NEW: Real-time speed metrics
+	// Real-time speed metrics
 	ReadSpeed  float64 `json:"read_speed_mbps"`  // Current read speed in MB/s
 	WriteSpeed float64 `json:"write_speed_mbps"` // Current write speed in MB/s
 }
@@ -83,10 +81,10 @@ type DiskIOStats struct {
 	WriteOps   uint64 `json:"write_ops"`     // Write operations
 	ReadTime   uint64 `json:"read_time_ms"`  // Time spent reading (ms)
 	WriteTime  uint64 `json:"write_time_ms"` // Time spent writing (ms)
-	// NEW: For speed calculation tracking
-	LastReadBytes  uint64    `json:"-"` // Previous read bytes (not exported)
-	LastWriteBytes uint64    `json:"-"` // Previous write bytes (not exported)
-	LastUpdateTime time.Time `json:"-"` // Last update time (not exported)
+	// For speed calculation tracking (not exported)
+	LastReadBytes  uint64    `json:"-"` // Previous read bytes
+	LastWriteBytes uint64    `json:"-"` // Previous write bytes
+	LastUpdateTime time.Time `json:"-"` // Last update time
 }
 
 // NetworkMetrics represents network usage information (SPEED FIELDS ADDED)
@@ -94,13 +92,13 @@ type NetworkMetrics struct {
 	Interfaces    []NetworkInterface `json:"interfaces"`       // Network interfaces
 	TotalSent     uint64             `json:"total_sent_bytes"` // Total bytes sent
 	TotalReceived uint64             `json:"total_recv_bytes"` // Total bytes received
-	// NEW: Real-time speed metrics
+	// Real-time speed metrics
 	UploadSpeed   float64 `json:"upload_speed_mbps"`   // Current upload speed in Mbps
 	DownloadSpeed float64 `json:"download_speed_mbps"` // Current download speed in Mbps
-	// NEW: For speed calculation tracking
-	LastTotalSent     uint64    `json:"-"` // Previous total sent (not exported)
-	LastTotalReceived uint64    `json:"-"` // Previous total received (not exported)
-	LastUpdateTime    time.Time `json:"-"` // Last update time (not exported)
+	// For speed calculation tracking (not exported)
+	LastTotalSent     uint64    `json:"-"` // Previous total sent
+	LastTotalReceived uint64    `json:"-"` // Previous total received
+	LastUpdateTime    time.Time `json:"-"` // Last update time
 }
 
 // NetworkInterface represents individual network interface information
@@ -144,7 +142,7 @@ type MetricsSnapshot struct {
 	Timestamp     time.Time     `json:"timestamp"`
 }
 
-// NEW: Speed calculation helper methods
+// Speed calculation helper methods
 
 // CalculateDiskSpeed calculates disk read/write speed in MB/s
 func (dm *DiskMetrics) CalculateDiskSpeed(lastStats DiskIOStats, timeDiff time.Duration) {
@@ -194,73 +192,6 @@ func (nm *NetworkMetrics) CalculateNetworkSpeed(lastSent, lastReceived uint64, t
 	if nm.DownloadSpeed < 0 {
 		nm.DownloadSpeed = 0
 	}
-}
-
-// String returns a formatted string representation of SystemMetrics
-func (sm *SystemMetrics) String() string {
-	data, _ := json.MarshalIndent(sm, "", "  ")
-	return string(data)
-}
-
-// ToJSON converts SystemMetrics to JSON string
-func (sm *SystemMetrics) ToJSON() (string, error) {
-	data, err := json.Marshal(sm)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-// FromJSON creates SystemMetrics from JSON string
-func (sm *SystemMetrics) FromJSON(jsonStr string) error {
-	return json.Unmarshal([]byte(jsonStr), sm)
-}
-
-// GetMemoryUsagePercent calculates memory usage percentage
-func (mm *MemoryMetrics) GetMemoryUsagePercent() float64 {
-	if mm.Total == 0 {
-		return 0
-	}
-	return float64(mm.Used) / float64(mm.Total) * 100
-}
-
-// GetDiskUsagePercent calculates disk usage percentage
-func (dm *DiskMetrics) GetDiskUsagePercent() float64 {
-	if dm.Total == 0 {
-		return 0
-	}
-	return float64(dm.Used) / float64(dm.Total) * 100
-}
-
-// IsHighUsage checks if any metric is above the threshold
-func (sm *SystemMetrics) IsHighUsage(cpuThreshold, memThreshold, diskThreshold float64) bool {
-	return sm.CPU.Usage > cpuThreshold ||
-		sm.Memory.Percent > memThreshold ||
-		sm.Disk.Percent > diskThreshold
-}
-
-// GetAverageLoadUsage returns the average CPU load usage
-func (cm *CPUMetrics) GetAverageLoadUsage() float64 {
-	if len(cm.LoadAvg) == 0 {
-		return 0
-	}
-	return cm.LoadAvg[0] // 1-minute load average
-}
-
-// NEW: Speed helper methods
-
-// GetFormattedDiskSpeed returns formatted disk speed strings
-func (dm *DiskMetrics) GetFormattedDiskSpeed() (string, string) {
-	readSpeed := fmt.Sprintf("%.1f MB/s", dm.ReadSpeed)
-	writeSpeed := fmt.Sprintf("%.1f MB/s", dm.WriteSpeed)
-	return readSpeed, writeSpeed
-}
-
-// GetFormattedNetworkSpeed returns formatted network speed strings
-func (nm *NetworkMetrics) GetFormattedNetworkSpeed() (string, string) {
-	uploadSpeed := fmt.Sprintf("%.1f Mbps", nm.UploadSpeed)
-	downloadSpeed := fmt.Sprintf("%.1f Mbps", nm.DownloadSpeed)
-	return uploadSpeed, downloadSpeed
 }
 
 // IsDiskIOHigh checks if disk I/O is unusually high

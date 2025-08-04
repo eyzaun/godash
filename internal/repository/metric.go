@@ -14,10 +14,8 @@ import (
 type MetricsRepository interface {
 	// Create operations
 	Create(metric *models.Metric) error
-	CreateBatch(metrics []*models.Metric) error
 
 	// Read operations
-	GetByID(id uint) (*models.Metric, error)
 	GetLatest() (*models.Metric, error)
 	GetLatestByHostname(hostname string) (*models.Metric, error)
 	GetHistory(from, to time.Time, limit, offset int) ([]*models.Metric, error)
@@ -59,31 +57,7 @@ func (r *metricsRepository) Create(metric *models.Metric) error {
 	return nil
 }
 
-// CreateBatch inserts multiple metric records in a single transaction
-func (r *metricsRepository) CreateBatch(metrics []*models.Metric) error {
-	if len(metrics) == 0 {
-		return nil
-	}
-
-	if err := r.db.CreateInBatches(metrics, 100).Error; err != nil {
-		return fmt.Errorf("failed to create metrics batch: %w", err)
-	}
-	return nil
-}
-
-// GetByID retrieves a metric by ID
-func (r *metricsRepository) GetByID(id uint) (*models.Metric, error) {
-	var metric models.Metric
-	if err := r.db.First(&metric, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("metric with id %d not found", id)
-		}
-		return nil, fmt.Errorf("failed to get metric by id: %w", err)
-	}
-	return &metric, nil
-}
-
-// GetLatest retrieves the most recent metric record (DÜZELTİLMİŞ VERSİYON)
+// GetLatest retrieves the most recent metric record (FIXED VERSION)
 func (r *metricsRepository) GetLatest() (*models.Metric, error) {
 	var metric models.Metric
 
@@ -161,7 +135,7 @@ func (r *metricsRepository) GetHistoryByHostname(hostname string, from, to time.
 	return metrics, nil
 }
 
-// GetAverageUsage calculates average resource usage over a duration (DÜZELTİLMİŞ)
+// GetAverageUsage calculates average resource usage over a duration (FIXED)
 func (r *metricsRepository) GetAverageUsage(duration time.Duration) (*models.AverageMetrics, error) {
 	since := time.Now().Add(-duration)
 
@@ -375,7 +349,7 @@ func (r *metricsRepository) GetTopHostsByUsage(metricType string, limit int) ([]
 	return results, nil
 }
 
-// GetUsageTrends returns usage trends for a hostname over time (DÜZELTİLMİŞ - PostgreSQL uyumlu)
+// GetUsageTrends returns usage trends for a hostname over time (FIXED - PostgreSQL compatible)
 func (r *metricsRepository) GetUsageTrends(hostname string, hours int) ([]*models.UsageTrend, error) {
 	var trends []*models.UsageTrend
 
@@ -429,7 +403,7 @@ func (r *metricsRepository) GetCountByDateRange(from, to time.Time) (int64, erro
 	return count, nil
 }
 
-// GetSystemStatus returns current system status for all hosts (DÜZELTİLMİŞ PostgreSQL VERSION)
+// GetSystemStatus returns current system status for all hosts (FIXED PostgreSQL VERSION)
 func (r *metricsRepository) GetSystemStatus() ([]*models.SystemStatus, error) {
 	var status []*models.SystemStatus
 
@@ -467,42 +441,4 @@ func (r *metricsRepository) GetSystemStatus() ([]*models.SystemStatus, error) {
 	}
 
 	return status, nil
-}
-
-// GetRecentMetrics returns recent metrics for real-time display (YENİ METOD)
-func (r *metricsRepository) GetRecentMetrics(limit int) ([]*models.Metric, error) {
-	var metrics []*models.Metric
-
-	if err := r.db.Order("id DESC").Limit(limit).Find(&metrics).Error; err != nil {
-		return nil, fmt.Errorf("failed to get recent metrics: %w", err)
-	}
-
-	return metrics, nil
-}
-
-// GetMetricsByTimeRange returns metrics for a specific time range (YENİ METOD)
-func (r *metricsRepository) GetMetricsByTimeRange(timeRange string) ([]*models.Metric, error) {
-	var metrics []*models.Metric
-	var since time.Time
-
-	switch timeRange {
-	case "1h":
-		since = time.Now().Add(-1 * time.Hour)
-	case "6h":
-		since = time.Now().Add(-6 * time.Hour)
-	case "24h":
-		since = time.Now().Add(-24 * time.Hour)
-	case "7d":
-		since = time.Now().Add(-7 * 24 * time.Hour)
-	default:
-		since = time.Now().Add(-1 * time.Hour)
-	}
-
-	if err := r.db.Where("timestamp >= ?", since).
-		Order("timestamp ASC").
-		Find(&metrics).Error; err != nil {
-		return nil, fmt.Errorf("failed to get metrics by time range: %w", err)
-	}
-
-	return metrics, nil
 }

@@ -79,7 +79,7 @@ func (h *HealthHandler) HealthCheck(c *gin.Context) {
 	// Memory health check
 	memCheck := h.checkMemory()
 	checks["memory"] = memCheck
-	if memCheck.Status != "unhealthy" && memCheck.Status == "warning" && overallStatus == "healthy" {
+	if memCheck.Status == "warning" && overallStatus == "healthy" {
 		overallStatus = "warning"
 	}
 
@@ -93,16 +93,7 @@ func (h *HealthHandler) HealthCheck(c *gin.Context) {
 	// Metrics collection health check
 	metricsCheck := h.checkMetricsCollection()
 	checks["metrics"] = metricsCheck
-	if metricsCheck.Status != "healthy" {
-		if overallStatus == "healthy" {
-			overallStatus = "warning"
-		}
-	}
-
-	// Disk space health check
-	diskCheck := h.checkDiskSpace()
-	checks["disk"] = diskCheck
-	if diskCheck.Status != "healthy" && overallStatus != "unhealthy" {
+	if metricsCheck.Status != "healthy" && overallStatus == "healthy" {
 		overallStatus = "warning"
 	}
 
@@ -151,19 +142,17 @@ func (h *HealthHandler) ReadinessCheck(c *gin.Context) {
 	}
 
 	// Check if we can write to database
-	if ready {
-		if h.canWriteToDatabase() {
-			services["database_write"] = ServiceStatus{
-				Status:  "ready",
-				Message: "Database is writable",
-			}
-		} else {
-			services["database_write"] = ServiceStatus{
-				Status:  "not_ready",
-				Message: "Cannot write to database",
-			}
-			ready = false
+	if ready && h.canWriteToDatabase() {
+		services["database_write"] = ServiceStatus{
+			Status:  "ready",
+			Message: "Database is writable",
 		}
+	} else if ready {
+		services["database_write"] = ServiceStatus{
+			Status:  "not_ready",
+			Message: "Cannot write to database",
+		}
+		ready = false
 	}
 
 	response := ReadinessResponse{
@@ -196,34 +185,41 @@ func (h *HealthHandler) PrometheusMetrics(c *gin.Context) {
 	totalMetrics, _ := h.metricsRepo.GetTotalCount()
 
 	// Build Prometheus metrics
-	metrics := `# HELP godash_info Application information
+	metrics := fmt.Sprintf(`# HELP godash_info Application information
 # TYPE godash_info gauge
 godash_info{version="1.0.0"} 1
 
 # HELP godash_uptime_seconds Application uptime in seconds
 # TYPE godash_uptime_seconds counter
-godash_uptime_seconds ` + formatFloat(time.Since(h.startTime).Seconds()) + `
+godash_uptime_seconds %.2f
 
 # HELP godash_goroutines_total Number of goroutines
 # TYPE godash_goroutines_total gauge
-godash_goroutines_total ` + formatInt(runtime.NumGoroutine()) + `
+godash_goroutines_total %d
 
 # HELP godash_memory_alloc_bytes Bytes allocated and still in use
 # TYPE godash_memory_alloc_bytes gauge
-godash_memory_alloc_bytes ` + formatUint64(m.Alloc) + `
+godash_memory_alloc_bytes %d
 
 # HELP godash_memory_sys_bytes Bytes obtained from the OS
 # TYPE godash_memory_sys_bytes gauge
-godash_memory_sys_bytes ` + formatUint64(m.Sys) + `
+godash_memory_sys_bytes %d
 
 # HELP godash_gc_runs_total Number of completed GC cycles
 # TYPE godash_gc_runs_total counter
-godash_gc_runs_total ` + formatUint32(m.NumGC) + `
+godash_gc_runs_total %d
 
 # HELP godash_metrics_total Total number of metrics in database
 # TYPE godash_metrics_total gauge
-godash_metrics_total ` + formatInt64(totalMetrics) + `
-`
+godash_metrics_total %d
+`,
+		time.Since(h.startTime).Seconds(),
+		runtime.NumGoroutine(),
+		m.Alloc,
+		m.Sys,
+		m.NumGC,
+		totalMetrics,
+	)
 
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.String(http.StatusOK, metrics)
@@ -267,9 +263,6 @@ func (h *HealthHandler) DatabaseStats(c *gin.Context) {
 		"total_metrics":        totalCount,
 		"recent_metrics_24h":   recentCount,
 		"active_hosts":         len(systemStatus),
-		"database_size_mb":     "N/A", // Would require specific query
-		"oldest_metric":        "N/A", // Would require specific query
-		"newest_metric":        "N/A", // Would require specific query
 		"collection_timestamp": time.Now(),
 	}
 
@@ -378,44 +371,8 @@ func (h *HealthHandler) checkMetricsCollection() HealthCheck {
 	}
 }
 
-func (h *HealthHandler) checkDiskSpace() HealthCheck {
-	// This is a simplified check - in production you'd check actual disk space
-	// For now, we'll just return healthy
-	return HealthCheck{
-		Status:  "healthy",
-		Message: "Disk space is adequate",
-		Data: map[string]interface{}{
-			"note": "Detailed disk monitoring not implemented in this demo",
-		},
-	}
-}
-
 func (h *HealthHandler) canWriteToDatabase() bool {
 	// Try to get the total count - if this works, we can read
 	_, err := h.metricsRepo.GetTotalCount()
 	return err == nil
-
-	// In a more comprehensive check, you might try to insert and delete a test record
-}
-
-// Helper functions for Prometheus metrics formatting
-
-func formatFloat(f float64) string {
-	return fmt.Sprintf("%.2f", f)
-}
-
-func formatInt(i int) string {
-	return fmt.Sprintf("%d", i)
-}
-
-func formatInt64(i int64) string {
-	return fmt.Sprintf("%d", i)
-}
-
-func formatUint32(i uint32) string {
-	return fmt.Sprintf("%d", i)
-}
-
-func formatUint64(i uint64) string {
-	return fmt.Sprintf("%d", i)
 }
