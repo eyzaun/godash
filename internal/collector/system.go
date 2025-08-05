@@ -61,8 +61,8 @@ type SystemCollector struct {
 	lastNetworkRecv  uint64
 }
 
-// CollectorConfig holds configuration for the system collector
-type CollectorConfig struct {
+// Config holds configuration for the system collector
+type Config struct {
 	CollectInterval time.Duration `json:"collect_interval"`
 	EnableCPU       bool          `json:"enable_cpu"`
 	EnableMemory    bool          `json:"enable_memory"`
@@ -71,9 +71,9 @@ type CollectorConfig struct {
 	EnableProcesses bool          `json:"enable_processes"`
 }
 
-// DefaultCollectorConfig returns default collector configuration
-func DefaultCollectorConfig() *CollectorConfig {
-	return &CollectorConfig{
+// DefaultConfig returns default collector configuration
+func DefaultConfig() *Config {
+	return &Config{
 		CollectInterval: 30 * time.Second,
 		EnableCPU:       true,
 		EnableMemory:    true,
@@ -84,9 +84,9 @@ func DefaultCollectorConfig() *CollectorConfig {
 }
 
 // NewSystemCollector creates a new system collector (SPEED TRACKING ADDED)
-func NewSystemCollector(config *CollectorConfig) *SystemCollector {
+func NewSystemCollector(config *Config) *SystemCollector {
 	if config == nil {
-		config = DefaultCollectorConfig()
+		config = DefaultConfig()
 	}
 
 	return &SystemCollector{

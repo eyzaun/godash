@@ -25,7 +25,7 @@ func TestNewSystemCollector(t *testing.T) {
 	}
 
 	// Test with custom config
-	config := &CollectorConfig{
+	config := &Config{
 		CollectInterval: 10 * time.Second,
 		EnableCPU:       true,
 		EnableMemory:    false,

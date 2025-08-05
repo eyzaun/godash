@@ -1,3 +1,4 @@
+// Package services provides business logic services for metrics collection and processing.
 package services
 
 import (
@@ -36,7 +37,7 @@ type CollectorService struct {
 // NewCollectorService creates a new collector service
 func NewCollectorService(cfg *config.Config, metricsRepo repository.MetricsRepository) *CollectorService {
 	// Create collector configuration
-	collectorConfig := &collector.CollectorConfig{
+	collectorConfig := &collector.Config{
 		CollectInterval: cfg.Metrics.CollectionInterval,
 		EnableCPU:       cfg.Metrics.EnableCPU,
 		EnableMemory:    cfg.Metrics.EnableMemory,

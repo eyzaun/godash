@@ -1,3 +1,4 @@
+// Package database provides database connection and migration functionality for PostgreSQL and SQLite.
 package database
 
 import (
