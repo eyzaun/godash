@@ -16,11 +16,14 @@
             background: #0f0f0f;
             color: #ffffff;
             line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
         
         .header {
             background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-            padding: 2rem 0;
+            padding: 3rem 0;
             text-align: center;
             border-bottom: 1px solid #333;
         }
@@ -44,6 +47,7 @@
             max-width: 1200px;
             margin: 0 auto;
             padding: 3rem 2rem;
+            flex: 1;
         }
         
         .grid {
@@ -118,44 +122,18 @@
             margin-bottom: 2rem;
         }
         
-        .endpoint-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1rem;
-            margin-top: 2rem;
-        }
-        
-        .endpoint {
-            background: #262626;
-            padding: 1rem;
-            border-radius: 8px;
-            border-left: 3px solid #00d4ff;
-        }
-        
-        .endpoint code {
-            color: #00d4ff;
-            font-family: 'Monaco', 'Consolas', monospace;
-            font-size: 0.9rem;
-        }
-        
-        .method {
-            display: inline-block;
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            margin-right: 0.5rem;
-        }
-        
-        .get { background: #4CAF50; }
-        .post { background: #2196F3; }
-        .delete { background: #f44336; }
-        
         footer {
             text-align: center;
             padding: 2rem;
             color: #666;
             border-top: 1px solid #333;
+            margin-top: auto;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 { font-size: 2rem; }
+            .container { padding: 2rem 1rem; }
+            .grid { grid-template-columns: 1fr; gap: 1rem; }
         }
     </style>
 </head>
@@ -173,21 +151,15 @@
         
         <div class="grid">
             <div class="card">
-                <h3>📊 Current Metrics</h3>
-                <p>Get real-time system metrics from all monitored hosts including CPU, memory, disk, and network usage.</p>
+                <h3>📊 Dashboard</h3>
+                <p>Real-time system monitoring dashboard with live charts and metrics.</p>
+                <a href="/dashboard" class="btn">Open Dashboard</a>
+            </div>
+            
+            <div class="card">
+                <h3>📈 Current Metrics</h3>
+                <p>Get real-time system metrics including CPU, memory, disk, and network usage.</p>
                 <a href="/api/v1/metrics/current" class="btn">View Current Data</a>
-            </div>
-            
-            <div class="card">
-                <h3>📈 Historical Data</h3>
-                <p>Access historical metrics with advanced filtering, pagination, and time-range queries.</p>
-                <a href="/api/v1/metrics/history" class="btn">Browse History</a>
-            </div>
-            
-            <div class="card">
-                <h3>🖥️ System Status</h3>
-                <p>Monitor the health and status of all systems in your infrastructure.</p>
-                <a href="/api/v1/system/status" class="btn">Check Status</a>
             </div>
             
             <div class="card">
@@ -196,50 +168,10 @@
                 <a href="/health" class="btn">Health Check</a>
             </div>
         </div>
-        
-        <div class="card">
-            <h3>🚀 Available API Endpoints</h3>
-            <p>Explore the full REST API with these key endpoints:</p>
-            
-            <div class="endpoint-list">
-                <div class="endpoint">
-                    <span class="method get">GET</span>
-                    <code>/api/v1/metrics/current</code>
-                </div>
-                <div class="endpoint">
-                    <span class="method get">GET</span>
-                    <code>/api/v1/metrics/history</code>
-                </div>
-                <div class="endpoint">
-                    <span class="method get">GET</span>
-                    <code>/api/v1/metrics/average</code>
-                </div>
-                <div class="endpoint">
-                    <span class="method get">GET</span>
-                    <code>/api/v1/system/status</code>
-                </div>
-                <div class="endpoint">
-                    <span class="method get">GET</span>
-                    <code>/api/v1/system/hosts</code>
-                </div>
-                <div class="endpoint">
-                    <span class="method post">POST</span>
-                    <code>/api/v1/metrics</code>
-                </div>
-                <div class="endpoint">
-                    <span class="method get">GET</span>
-                    <code>/health</code>
-                </div>
-                <div class="endpoint">
-                    <span class="method delete">DELETE</span>
-                    <code>/api/v1/admin/metrics/cleanup</code>
-                </div>
-            </div>
-        </div>
     </div>
     
     <footer>
-        <p>&copy; 2024 GoDash - Built with ❤️ using Go | <strong>Web Dashboard Coming in Week 3!</strong></p>
+        <p>&copy; 2024 GoDash - Built with ❤️ using Go</p>
     </footer>
 </body>
 </html>
