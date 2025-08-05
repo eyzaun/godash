@@ -26,7 +26,9 @@ class ChartManager {
             process: null,
             trends: null,
             diskIOSpeed: null,
-            networkSpeed: null
+            networkSpeed: null,
+            // Dynamic partition charts
+            partitions: new Map(), // NEW: Dynamic partition charts
         };
 
         // Chart data storage
@@ -675,13 +677,131 @@ class ChartManager {
      */
     destroyCharts() {
         Object.keys(this.charts).forEach(key => {
+            if (key === 'partitions') {
+                // Handle partitions Map separately
+                return;
+            }
             if (this.charts[key] && typeof this.charts[key].destroy === 'function') {
                 this.charts[key].destroy();
                 this.charts[key] = null;
             }
         });
+
+        // Destroy partition charts
+        this.destroyPartitionCharts();
         
         console.log('🗑️ All charts destroyed');
+    }
+
+    /**
+     * Initialize individual partition chart (optimized to match existing charts)
+     */
+    initializePartitionChart(index, partition) {
+        const canvasId = `partition-chart-${index}`;
+        const canvas = document.getElementById(canvasId);
+        
+        if (!canvas) {
+            console.warn(`Canvas ${canvasId} not found for partition chart`);
+            return;
+        }
+
+        try {
+            // Destroy existing chart if it exists
+            if (this.charts.partitions.has(index)) {
+                this.charts.partitions.get(index).destroy();
+            }
+
+            const ctx = canvas.getContext('2d');
+            const usagePercent = partition.usage_percent || 0;
+
+            // Use the exact same configuration as your existing charts for consistency
+            const chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Used', 'Free'],
+                    datasets: [{
+                        data: [usagePercent, 100 - usagePercent],
+                        backgroundColor: [
+                            this.getDiskUsageColor(usagePercent),
+                            'rgba(255, 255, 255, 0.1)'
+                        ],
+                        borderWidth: 0,
+                        cutout: '70%'
+                    }]
+                },
+                options: {
+                    ...this.defaultOptions,
+                    plugins: {
+                        ...this.defaultOptions.plugins,
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            ...this.defaultOptions.plugins.tooltip,
+                            callbacks: {
+                                label: function(context) {
+                                    return context.label + ': ' + context.parsed.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            this.charts.partitions.set(index, chart);
+            console.log(`✅ Partition chart ${index} initialized for ${partition.device}`);
+        } catch (error) {
+            console.error(`❌ Error initializing partition chart ${index}:`, error);
+        }
+    }
+
+    /**
+     * Update partition chart with new data (matching existing chart update pattern)
+     */
+    updatePartitionChart(index, usagePercent) {
+        const chart = this.charts.partitions.get(index);
+        if (!chart || !chart.data || !chart.data.datasets || !chart.data.datasets[0]) {
+            console.warn(`❌ Partition chart ${index} not properly initialized`);
+            return;
+        }
+
+        try {
+            // Update data exactly like existing charts
+            chart.data.datasets[0].data = [usagePercent, 100 - usagePercent];
+            
+            // Update color safely - check if backgroundColor array exists
+            if (chart.data.datasets[0].backgroundColor && Array.isArray(chart.data.datasets[0].backgroundColor)) {
+                chart.data.datasets[0].backgroundColor[0] = this.getDiskUsageColor(usagePercent);
+            }
+            
+            // Use 'active' update mode like all other existing charts for consistency
+            chart.update('active');
+        } catch (error) {
+            console.error(`❌ Error updating partition chart ${index}:`, error);
+        }
+    }
+
+    /**
+     * Get disk usage color based on percentage
+     */
+    getDiskUsageColor(percentage) {
+        if (percentage > 90) return '#e74c3c'; // Red
+        if (percentage > 80) return '#f39c12'; // Orange  
+        if (percentage > 70) return '#f1c40f'; // Yellow
+        return this.colors.primary; // Default blue/green
+    }
+
+    /**
+     * Destroy all partition charts
+     */
+    destroyPartitionCharts() {
+        this.charts.partitions.forEach((chart, index) => {
+            if (chart) {
+                chart.destroy();
+                console.log(`🗑️ Partition chart ${index} destroyed`);
+            }
+        });
+        this.charts.partitions.clear();
     }
 
     /**

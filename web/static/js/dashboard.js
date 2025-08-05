@@ -621,6 +621,25 @@ class DashboardApp {
                 }
             }
 
+            // Handle disk partition data (create once, update afterwards)
+            if (metrics.disk_partitions && metrics.disk_partitions.length > 0) {
+                console.log('🔥 DISK PARTITIONS DETECTED:', metrics.disk_partitions);
+                
+                // Create section if it doesn't exist
+                if (!document.getElementById('disk-partitions-section')) {
+                    this.createDiskPartitionSection(metrics.disk_partitions);
+                } else {
+                    // Update existing charts
+                    this.updateDiskPartitionCharts(metrics.disk_partitions);
+                }
+            } else {
+                console.log('❌ No disk partitions data found in metrics:', {
+                    hasPartitions: !!metrics.disk_partitions,
+                    partitionsLength: metrics.disk_partitions ? metrics.disk_partitions.length : 'undefined',
+                    fullMetrics: Object.keys(metrics)
+                });
+            }
+
         } catch (error) {
             this.log('❌ Error updating metrics display:', error);
         }
@@ -1037,6 +1056,148 @@ class DashboardApp {
         if (this.options.debug) {
             console.error('Dashboard Error:', error);
         }
+    }
+
+    /**
+     * Create disk partition section using existing structure (create once only)
+     */
+    createDiskPartitionSection(diskPartitions) {
+        if (!diskPartitions || diskPartitions.length === 0) {
+            console.log('No disk partitions data available');
+            return;
+        }
+
+        console.log('Creating disk partition section for:', diskPartitions);
+
+        // Find the metrics section
+        const metricsSection = document.querySelector('.metrics-section');
+        if (!metricsSection) {
+            console.error('Metrics section not found');
+            return;
+        }
+
+        // Check if partition section already exists - if yes, don't recreate
+        let partitionSection = document.getElementById('disk-partitions-section');
+        
+        if (partitionSection) {
+            console.log('Partition section already exists, skipping creation');
+            return; // Don't recreate if already exists
+        }
+
+        // Create new section only if it doesn't exist
+        partitionSection = document.createElement('section');
+        partitionSection.id = 'disk-partitions-section';
+        partitionSection.className = 'metrics-section';
+        partitionSection.innerHTML = `
+            <h2>
+                <i class="fas fa-hdd"></i>
+                Disk Partitions
+            </h2>
+            <div class="metrics-grid" id="disk-partitions-grid">
+            </div>
+        `;
+        
+        // Insert after main metrics section
+        metricsSection.parentNode.insertBefore(partitionSection, metricsSection.nextSibling);
+
+        const partitionsGrid = document.getElementById('disk-partitions-grid');
+        if (!partitionsGrid) {
+            console.error('Partitions grid not found');
+            return;
+        }
+
+        // Create card for each partition
+        diskPartitions.forEach((partition, index) => {
+            if (!partition.device || partition.total_bytes === 0) {
+                console.log('Skipping partition with no device or 0 total bytes:', partition);
+                return;
+            }
+
+            const usagePercent = partition.usage_percent || 0;
+            const usedGB = (partition.used_bytes / (1024*1024*1024)).toFixed(1);
+            const freeGB = (partition.free_bytes / (1024*1024*1024)).toFixed(1);
+            const totalGB = (partition.total_bytes / (1024*1024*1024)).toFixed(1);
+
+            const partitionCard = document.createElement('div');
+            partitionCard.className = 'metric-card disk-card';
+            partitionCard.innerHTML = `
+                <div class="metric-header">
+                    <h3>
+                        <i class="fas fa-hdd"></i>
+                        ${partition.device} (${partition.mountpoint})
+                    </h3>
+                </div>
+                
+                <div class="metric-value">
+                    <span id="partition-usage-${index}">${usagePercent.toFixed(1)}</span><span class="unit">%</span>
+                </div>
+                
+                <div class="chart-container">
+                    <canvas id="partition-chart-${index}"></canvas>
+                </div>
+                
+                <div class="metric-details">
+                    <div class="detail-item">
+                        <span>Used</span>
+                        <span id="partition-used-${index}">${usedGB} GB</span>
+                    </div>
+                    <div class="detail-item">
+                        <span>Free</span>
+                        <span id="partition-free-${index}">${freeGB} GB</span>
+                    </div>
+                    <div class="detail-item">
+                        <span>Total</span>
+                        <span id="partition-total-${index}">${totalGB} GB</span>
+                    </div>
+                    <div class="detail-item">
+                        <span>Type</span>
+                        <span>${partition.fstype}</span>
+                    </div>
+                </div>
+            `;
+
+            partitionsGrid.appendChild(partitionCard);
+
+            // Initialize chart for this partition
+            setTimeout(() => {
+                if (this.chartManager && this.chartManager.initializePartitionChart) {
+                    console.log(`Partition chart initialized for ${partition.device}`);
+                    this.chartManager.initializePartitionChart(index, partition);
+                }
+            }, 100); // Small delay to ensure DOM is ready
+        });
+
+        console.log(`Created ${diskPartitions.length} partition cards`);
+    }
+
+    /**
+     * Update existing disk partition charts with new data
+     */
+    updateDiskPartitionCharts(diskPartitions) {
+        if (!diskPartitions || diskPartitions.length === 0 || !this.chartManager) return;
+
+        diskPartitions.forEach((partition, index) => {
+            const usagePercent = partition.usage_percent || 0;
+            
+            // Update chart
+            if (this.chartManager && this.chartManager.updatePartitionChart) {
+                this.chartManager.updatePartitionChart(index, usagePercent);
+            }
+            
+            // Update text values
+            const usageElement = document.getElementById(`partition-usage-${index}`);
+            if (usageElement) {
+                usageElement.textContent = usagePercent.toFixed(1);
+            }
+            
+            const usedGB = (partition.used_bytes / (1024*1024*1024)).toFixed(1);
+            const freeGB = (partition.free_bytes / (1024*1024*1024)).toFixed(1);
+            const totalGB = (partition.total_bytes / (1024*1024*1024)).toFixed(1);
+            
+            this.updateElementText(document.getElementById(`partition-used-${index}`), `${usedGB} GB`);
+            this.updateElementText(document.getElementById(`partition-free-${index}`), `${freeGB} GB`);
+            this.updateElementText(document.getElementById(`partition-total-${index}`), `${totalGB} GB`);
+        });
     }
 
     /**
