@@ -455,7 +455,7 @@ func TestCreateMetric_Success(t *testing.T) {
 	metric := createSampleMetric()
 	mockRepo.On("Create", mock.AnythingOfType("*models.Metric")).Return(nil)
 
-	jsonData, _ := json.Marshal(metric)
+	jsonData, _ := json.Marshal(metric) // Error ignored for test data
 	req, _ := http.NewRequest("POST", "/api/v1/metrics", bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -608,7 +608,7 @@ func BenchmarkCreateMetric(b *testing.B) {
 	metric := createSampleMetric()
 	mockRepo.On("Create", mock.AnythingOfType("*models.Metric")).Return(nil)
 
-	jsonData, _ := json.Marshal(metric)
+	jsonData, _ := json.Marshal(metric) // Error ignored for benchmark test
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

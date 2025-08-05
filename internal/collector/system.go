@@ -1,3 +1,4 @@
+// Package collector provides system metrics collection functionality for CPU, memory, disk, and process monitoring.
 package collector
 
 import (

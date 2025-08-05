@@ -467,13 +467,13 @@ const (
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
-		c.conn.Close()
+		_ = c.conn.Close() // Error ignored during cleanup
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	_ = c.conn.SetReadDeadline(time.Now().Add(pongWait)) // Error ignored for socket setup
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		_ = c.conn.SetReadDeadline(time.Now().Add(pongWait)) // Error ignored for ping handling
 		c.lastPing = time.Now()
 		return nil
 	})
@@ -497,16 +497,16 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		_ = c.conn.Close() // Error ignored during cleanup
 	}()
 
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait)) // Error ignored for socket timing
 			if !ok {
 				// The hub closed the channel
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{}) // Error ignored during close
 				return
 			}
 
@@ -514,13 +514,13 @@ func (c *Client) writePump() {
 			if err != nil {
 				return
 			}
-			w.Write(message)
+			_, _ = w.Write(message) // Error ignored for write operation
 
 			// Add queued messages to the current WebSocket message
 			n := len(c.send)
 			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-c.send)
+				_, _ = w.Write([]byte{'\n'}) // Error ignored for write operation
+				_, _ = w.Write(<-c.send)     // Error ignored for write operation
 			}
 
 			if err := w.Close(); err != nil {
@@ -528,7 +528,7 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait)) // Error ignored for socket timing
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -559,7 +559,7 @@ func (c *Client) handleMessage(message []byte) {
 			Timestamp: time.Now(),
 		}
 
-		data, _ := json.Marshal(pongMsg)
+		data, _ := json.Marshal(pongMsg) // Error ignored for pong message
 		select {
 		case c.send <- data:
 		default:

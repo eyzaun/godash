@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/eyzaun/godash/internal/models"
+	"github.com/eyzaun/godash/internal/utils"
 	"github.com/shirou/gopsutil/v3/disk"
 )
 
@@ -225,7 +226,7 @@ func (d *DiskCollector) GetDiskHealth() (*DiskHealthInfo, error) {
 	}
 
 	health := &DiskHealthInfo{
-		OverallHealth: "healthy",
+		OverallHealth: utils.StatusHealthy,
 		Warnings:      []string{},
 		Critical:      []string{},
 	}
@@ -233,11 +234,11 @@ func (d *DiskCollector) GetDiskHealth() (*DiskHealthInfo, error) {
 	// Check overall disk usage
 	if metrics.Percent > 95 {
 		health.Critical = append(health.Critical, "Overall disk usage above 95%")
-		health.OverallHealth = "critical"
+		health.OverallHealth = utils.StatusCritical
 	} else if metrics.Percent > 85 {
 		health.Warnings = append(health.Warnings, "Overall disk usage above 85%")
-		if health.OverallHealth == "healthy" {
-			health.OverallHealth = "warning"
+		if health.OverallHealth == utils.StatusHealthy {
+			health.OverallHealth = utils.StatusWarning
 		}
 	}
 
@@ -247,13 +248,13 @@ func (d *DiskCollector) GetDiskHealth() (*DiskHealthInfo, error) {
 			health.Critical = append(health.Critical,
 				fmt.Sprintf("Partition %s usage above 95%% (%.1f%%)",
 					partition.Mountpoint, partition.Percent))
-			health.OverallHealth = "critical"
+			health.OverallHealth = utils.StatusCritical
 		} else if partition.Percent > 85 {
 			health.Warnings = append(health.Warnings,
 				fmt.Sprintf("Partition %s usage above 85%% (%.1f%%)",
 					partition.Mountpoint, partition.Percent))
-			if health.OverallHealth == "healthy" {
-				health.OverallHealth = "warning"
+			if health.OverallHealth == utils.StatusHealthy {
+				health.OverallHealth = utils.StatusWarning
 			}
 		}
 

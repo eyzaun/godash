@@ -182,7 +182,7 @@ func (h *HealthHandler) PrometheusMetrics(c *gin.Context) {
 	runtime.ReadMemStats(&m)
 
 	// Get total metrics count
-	totalMetrics, _ := h.metricsRepo.GetTotalCount()
+	totalMetrics, _ := h.metricsRepo.GetTotalCount() // Error ignored for metrics collection
 
 	// Build Prometheus metrics
 	metrics := fmt.Sprintf(`# HELP godash_info Application information

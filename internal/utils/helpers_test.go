@@ -60,9 +60,9 @@ func TestParseBytes(t *testing.T) {
 		{"1 MB", 1048576, false},
 		{"1 GB", 1073741824, false},
 		{"invalid", 0, true},
-			   {"1.5 XB", 1, false},
+		{"1.5 XB", 1, false},
 		{"", 0, true},
-		{" KB", 0, true}, // No number before unit
+		{" KB", 0, true},   // No number before unit
 		{"-1 KB", 0, true}, // Negative number
 	}
 
@@ -153,7 +153,7 @@ func TestClampFloat(t *testing.T) {
 	for _, test := range tests {
 		result := ClampFloat(test.value, test.min, test.max)
 		if result != test.expected {
-			t.Errorf("ClampFloat(%.1f, %.1f, %.1f) = %.1f; expected %.1f", 
+			t.Errorf("ClampFloat(%.1f, %.1f, %.1f) = %.1f; expected %.1f",
 				test.value, test.min, test.max, result, test.expected)
 		}
 	}
@@ -191,7 +191,7 @@ func TestSafeDivide(t *testing.T) {
 	for _, test := range tests {
 		result := SafeDivide(test.numerator, test.denominator)
 		if result != test.expected {
-			t.Errorf("SafeDivide(%.1f, %.1f) = %.1f; expected %.1f", 
+			t.Errorf("SafeDivide(%.1f, %.1f) = %.1f; expected %.1f",
 				test.numerator, test.denominator, result, test.expected)
 		}
 	}
@@ -212,7 +212,7 @@ func TestCalculatePercentage(t *testing.T) {
 	for _, test := range tests {
 		result := CalculatePercentage(test.used, test.total)
 		if result != test.expected {
-			t.Errorf("CalculatePercentage(%d, %d) = %.1f; expected %.1f", 
+			t.Errorf("CalculatePercentage(%d, %d) = %.1f; expected %.1f",
 				test.used, test.total, result, test.expected)
 		}
 	}
@@ -233,7 +233,7 @@ func TestTruncateString(t *testing.T) {
 	for _, test := range tests {
 		result := TruncateString(test.input, test.length)
 		if result != test.expected {
-			t.Errorf("TruncateString(%s, %d) = %s; expected %s", 
+			t.Errorf("TruncateString(%s, %d) = %s; expected %s",
 				test.input, test.length, result, test.expected)
 		}
 	}
@@ -253,7 +253,7 @@ func TestPadString(t *testing.T) {
 	for _, test := range tests {
 		result := PadString(test.input, test.length)
 		if result != test.expected {
-			t.Errorf("PadString(%s, %d) = %s; expected %s", 
+			t.Errorf("PadString(%s, %d) = %s; expected %s",
 				test.input, test.length, result, test.expected)
 		}
 	}
@@ -261,7 +261,7 @@ func TestPadString(t *testing.T) {
 
 func TestContains(t *testing.T) {
 	slice := []string{"apple", "banana", "cherry"}
-	
+
 	tests := []struct {
 		item     string
 		expected bool
@@ -284,12 +284,12 @@ func TestRemoveFromSlice(t *testing.T) {
 	slice := []string{"apple", "banana", "cherry", "banana"}
 	result := RemoveFromSlice(slice, "banana")
 	expected := []string{"apple", "cherry"}
-	
+
 	if len(result) != len(expected) {
 		t.Errorf("RemoveFromSlice length = %d; expected %d", len(result), len(expected))
 		return
 	}
-	
+
 	for i, v := range result {
 		if v != expected[i] {
 			t.Errorf("RemoveFromSlice result[%d] = %s; expected %s", i, v, expected[i])
@@ -349,7 +349,7 @@ func TestGetMemoryPressureLevel(t *testing.T) {
 	for _, test := range tests {
 		result := GetMemoryPressureLevel(test.percent)
 		if result != test.expected {
-			t.Errorf("GetMemoryPressureLevel(%.1f) = %s; expected %s", 
+			t.Errorf("GetMemoryPressureLevel(%.1f) = %s; expected %s",
 				test.percent, result, test.expected)
 		}
 	}
@@ -368,7 +368,7 @@ func TestGetDiskHealthLevel(t *testing.T) {
 	for _, test := range tests {
 		result := GetDiskHealthLevel(test.percent)
 		if result != test.expected {
-			t.Errorf("GetDiskHealthLevel(%.1f) = %s; expected %s", 
+			t.Errorf("GetDiskHealthLevel(%.1f) = %s; expected %s",
 				test.percent, result, test.expected)
 		}
 	}
@@ -388,7 +388,7 @@ func TestGetCPULoadLevel(t *testing.T) {
 	for _, test := range tests {
 		result := GetCPULoadLevel(test.percent)
 		if result != test.expected {
-			t.Errorf("GetCPULoadLevel(%.1f) = %s; expected %s", 
+			t.Errorf("GetCPULoadLevel(%.1f) = %s; expected %s",
 				test.percent, result, test.expected)
 		}
 	}
@@ -409,9 +409,9 @@ func TestValidatePercentage(t *testing.T) {
 	for _, test := range tests {
 		err := ValidatePercentage(test.percent)
 		hasError := err != nil
-		
+
 		if hasError != test.hasError {
-			t.Errorf("ValidatePercentage(%.1f) error status = %v; expected %v", 
+			t.Errorf("ValidatePercentage(%.1f) error status = %v; expected %v",
 				test.percent, hasError, test.hasError)
 		}
 	}
