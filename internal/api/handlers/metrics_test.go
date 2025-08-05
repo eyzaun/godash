@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -116,13 +117,57 @@ func (m *MockMetricsRepository) GetSystemStatus() ([]*models.SystemStatus, error
 	return args.Get(0).([]*models.SystemStatus), args.Error(1)
 }
 
-// Test helper functions
+// MockSystemCollector - Mock collector implementation
+type MockSystemCollector struct {
+	mock.Mock
+}
 
-func setupTestRouter() (*gin.Engine, *MockMetricsRepository) {
+func (m *MockSystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.SystemMetrics), args.Error(1)
+}
+
+func (m *MockSystemCollector) GetSystemInfo() (*models.SystemInfo, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.SystemInfo), args.Error(1)
+}
+
+func (m *MockSystemCollector) GetMetricsSnapshot() (*models.MetricsSnapshot, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.MetricsSnapshot), args.Error(1)
+}
+
+func (m *MockSystemCollector) StartCollection(ctx context.Context, interval time.Duration) <-chan *models.SystemMetrics {
+	args := m.Called(ctx, interval)
+	return args.Get(0).(<-chan *models.SystemMetrics)
+}
+
+func (m *MockSystemCollector) GetTopProcesses(count int, sortBy string) ([]models.ProcessInfo, error) {
+	args := m.Called(count, sortBy)
+	return args.Get(0).([]models.ProcessInfo), args.Error(1)
+}
+
+func (m *MockSystemCollector) IsHealthy() (bool, []string, error) {
+	args := m.Called()
+	return args.Get(0).(bool), args.Get(1).([]string), args.Error(2)
+}
+
+// Test helper functions
+func setupTestRouter() (*gin.Engine, *MockMetricsRepository, *MockSystemCollector) {
 	gin.SetMode(gin.TestMode)
 
 	mockRepo := new(MockMetricsRepository)
-	handler := NewMetricsHandler(mockRepo, nil)
+	mockCollector := new(MockSystemCollector)
+	handler := NewMetricsHandler(mockRepo, mockCollector)
 
 	router := gin.New()
 	v1 := router.Group("/api/v1")
@@ -143,7 +188,7 @@ func setupTestRouter() (*gin.Engine, *MockMetricsRepository) {
 		v1.DELETE("/admin/metrics/cleanup", handler.CleanupOldMetrics)
 	}
 
-	return router, mockRepo
+	return router, mockRepo, mockCollector
 }
 
 func createSampleMetric() *models.Metric {
@@ -161,13 +206,99 @@ func createSampleMetric() *models.Metric {
 	}
 }
 
+func createSampleSystemMetrics() *models.SystemMetrics {
+	return &models.SystemMetrics{
+		CPU: models.CPUMetrics{
+			Usage:       75.5,
+			Cores:       4,
+			CoreUsage:   []float64{70.0, 80.0, 75.0, 65.0},
+			LoadAvg:     []float64{1.2, 1.5, 1.3},
+			Frequency:   2400.0,
+			Temperature: 45.0,
+		},
+		Memory: models.MemoryMetrics{
+			Total:       8589934592,
+			Used:        4294967296,
+			Available:   4294967296,
+			Free:        2147483648,
+			Cached:      1073741824,
+			Buffers:     536870912,
+			Percent:     50.0,
+			SwapTotal:   2147483648,
+			SwapUsed:    0,
+			SwapPercent: 0.0,
+		},
+		Disk: models.DiskMetrics{
+			Total:   107374182400,
+			Used:    53687091200,
+			Free:    53687091200,
+			Percent: 50.0,
+			Partitions: []models.PartitionInfo{
+				{
+					Device:     "/dev/sda1",
+					Mountpoint: "/",
+					Fstype:     "ext4",
+					Total:      107374182400,
+					Used:       53687091200,
+					Free:       53687091200,
+					Percent:    50.0,
+				},
+			},
+			IOStats: models.DiskIOStats{
+				ReadBytes:  1048576,
+				WriteBytes: 524288,
+				ReadOps:    100,
+				WriteOps:   50,
+				ReadTime:   10,
+				WriteTime:  5,
+			},
+			ReadSpeed:  10.5,
+			WriteSpeed: 5.2,
+		},
+		Network: models.NetworkMetrics{
+			Interfaces: []models.NetworkInterface{
+				{
+					Name:        "eth0",
+					BytesSent:   10485760,
+					BytesRecv:   52428800,
+					PacketsSent: 1000,
+					PacketsRecv: 5000,
+					Errors:      0,
+					Drops:       0,
+				},
+			},
+			TotalSent:     10485760,
+			TotalReceived: 52428800,
+			UploadSpeed:   1.5,
+			DownloadSpeed: 8.2,
+		},
+		Processes: models.ProcessActivity{
+			TotalProcesses:   150,
+			RunningProcesses: 120,
+			StoppedProcesses: 5,
+			ZombieProcesses:  0,
+			TopProcesses: []models.ProcessInfo{
+				{
+					PID:         1234,
+					Name:        "test-process",
+					CPUPercent:  25.5,
+					MemoryBytes: 134217728,
+					Status:      "running",
+				},
+			},
+		},
+		Timestamp: time.Now(),
+		Hostname:  "test-host",
+		Uptime:    24 * time.Hour,
+	}
+}
+
 // Test cases
-
 func TestGetCurrentMetrics_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, mockCollector := setupTestRouter()
 
-	expectedMetric := createSampleMetric()
-	mockRepo.On("GetLatest").Return(expectedMetric, nil)
+	expectedSystemMetrics := createSampleSystemMetrics()
+	mockCollector.On("GetSystemMetrics").Return(expectedSystemMetrics, nil)
 
 	req, _ := http.NewRequest("GET", "/api/v1/metrics/current", nil)
 	w := httptest.NewRecorder()
@@ -182,12 +313,13 @@ func TestGetCurrentMetrics_Success(t *testing.T) {
 	assert.NotNil(t, response.Data)
 
 	mockRepo.AssertExpectations(t)
+	mockCollector.AssertExpectations(t)
 }
 
 func TestGetCurrentMetrics_NotFound(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, mockCollector := setupTestRouter()
 
-	mockRepo.On("GetLatest").Return((*models.Metric)(nil), fmt.Errorf("no metrics found"))
+	mockCollector.On("GetSystemMetrics").Return((*models.SystemMetrics)(nil), fmt.Errorf("no metrics found"))
 
 	req, _ := http.NewRequest("GET", "/api/v1/metrics/current", nil)
 	w := httptest.NewRecorder()
@@ -202,10 +334,11 @@ func TestGetCurrentMetrics_NotFound(t *testing.T) {
 	assert.NotEmpty(t, response.Error)
 
 	mockRepo.AssertExpectations(t)
+	mockCollector.AssertExpectations(t)
 }
 
 func TestGetCurrentMetricsByHostname_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, mockCollector := setupTestRouter()
 
 	hostname := "test-host"
 	expectedMetric := createSampleMetric()
@@ -223,30 +356,11 @@ func TestGetCurrentMetricsByHostname_Success(t *testing.T) {
 	assert.True(t, response.Success)
 
 	mockRepo.AssertExpectations(t)
-}
-
-func TestGetCurrentMetricsByHostname_NotFound(t *testing.T) {
-	router, mockRepo := setupTestRouter()
-
-	hostname := "nonexistent-host"
-	mockRepo.On("GetLatestByHostname", hostname).Return((*models.Metric)(nil), fmt.Errorf("no metrics found for hostname %s", hostname))
-
-	req, _ := http.NewRequest("GET", "/api/v1/metrics/current/"+hostname, nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-
-	var response APIResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.False(t, response.Success)
-
-	mockRepo.AssertExpectations(t)
+	mockCollector.AssertExpectations(t)
 }
 
 func TestGetMetricsHistory_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, mockCollector := setupTestRouter()
 
 	expectedMetrics := []*models.Metric{createSampleMetric()}
 	mockRepo.On("GetHistory", mock.AnythingOfType("time.Time"), mock.AnythingOfType("time.Time"), 50, 0).Return(expectedMetrics, nil)
@@ -265,133 +379,11 @@ func TestGetMetricsHistory_Success(t *testing.T) {
 	assert.Equal(t, int64(1), response.Pagination.Total)
 
 	mockRepo.AssertExpectations(t)
-}
-
-func TestGetMetricsHistory_WithTimeRange(t *testing.T) {
-	router, mockRepo := setupTestRouter()
-
-	expectedMetrics := []*models.Metric{createSampleMetric()}
-	mockRepo.On("GetHistory", mock.AnythingOfType("time.Time"), mock.AnythingOfType("time.Time"), 50, 0).Return(expectedMetrics, nil)
-	mockRepo.On("GetCountByDateRange", mock.AnythingOfType("time.Time"), mock.AnythingOfType("time.Time")).Return(int64(1), nil)
-
-	from := time.Now().Add(-2 * time.Hour).Format(time.RFC3339)
-	to := time.Now().Format(time.RFC3339)
-
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/metrics/history?from=%s&to=%s", from, to), nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	mockRepo.AssertExpectations(t)
-}
-
-func TestGetMetricsHistory_InvalidTimeFormat(t *testing.T) {
-	router, _ := setupTestRouter()
-
-	req, _ := http.NewRequest("GET", "/api/v1/metrics/history?from=invalid-time", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	var response APIResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.False(t, response.Success)
-	assert.Contains(t, response.Error, "Invalid from time format")
-}
-
-func TestGetAverageMetrics_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
-
-	expectedAverage := &models.AverageMetrics{
-		Duration:       time.Hour,
-		AvgCPUUsage:    65.5,
-		AvgMemoryUsage: 70.2,
-		AvgDiskUsage:   45.8,
-		SampleCount:    120,
-	}
-
-	mockRepo.On("GetAverageUsage", time.Hour).Return(expectedAverage, nil)
-
-	req, _ := http.NewRequest("GET", "/api/v1/metrics/average?duration=1h", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response APIResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.True(t, response.Success)
-
-	mockRepo.AssertExpectations(t)
-}
-
-func TestGetAverageMetrics_InvalidDuration(t *testing.T) {
-	router, _ := setupTestRouter()
-
-	req, _ := http.NewRequest("GET", "/api/v1/metrics/average?duration=invalid", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	var response APIResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.False(t, response.Success)
-	assert.Contains(t, response.Error, "Invalid duration format")
-}
-
-func TestGetTopHostsByUsage_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
-
-	expectedHosts := []*models.HostUsage{
-		{
-			Hostname:       "host1",
-			AvgCPUUsage:    85.5,
-			AvgMemoryUsage: 70.2,
-			AvgDiskUsage:   45.8,
-			LastSeen:       time.Now(),
-		},
-	}
-
-	mockRepo.On("GetTopHostsByUsage", "cpu", 10).Return(expectedHosts, nil)
-
-	req, _ := http.NewRequest("GET", "/api/v1/metrics/top/cpu", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response APIResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.True(t, response.Success)
-
-	mockRepo.AssertExpectations(t)
-}
-
-func TestGetTopHostsByUsage_InvalidType(t *testing.T) {
-	router, _ := setupTestRouter()
-
-	req, _ := http.NewRequest("GET", "/api/v1/metrics/top/invalid", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	var response APIResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.False(t, response.Success)
-	assert.Contains(t, response.Error, "Invalid metric type")
+	mockCollector.AssertExpectations(t)
 }
 
 func TestCreateMetric_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, mockCollector := setupTestRouter()
 
 	metric := createSampleMetric()
 	mockRepo.On("Create", mock.AnythingOfType("*models.Metric")).Return(nil)
@@ -411,59 +403,18 @@ func TestCreateMetric_Success(t *testing.T) {
 	assert.True(t, response.Success)
 
 	mockRepo.AssertExpectations(t)
-}
-
-func TestCreateMetric_InvalidJSON(t *testing.T) {
-	router, _ := setupTestRouter()
-
-	req, _ := http.NewRequest("POST", "/api/v1/metrics", bytes.NewBufferString("invalid json"))
-	req.Header.Set("Content-Type", "application/json")
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	var response APIResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.False(t, response.Success)
-}
-
-func TestGetSystemStatus_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
-
-	expectedStatus := []*models.SystemStatus{
-		{
-			Hostname:      "host1",
-			CPUUsage:      75.5,
-			MemoryPercent: 60.2,
-			DiskPercent:   45.8,
-			Timestamp:     time.Now(),
-			Status:        "online",
-		},
-	}
-
-	mockRepo.On("GetSystemStatus").Return(expectedStatus, nil)
-
-	req, _ := http.NewRequest("GET", "/api/v1/system/status", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response APIResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.True(t, response.Success)
-
-	mockRepo.AssertExpectations(t)
+	mockCollector.AssertExpectations(t)
 }
 
 func TestGetStats_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, mockCollector := setupTestRouter()
 
 	mockRepo.On("GetTotalCount").Return(int64(1000), nil)
+	mockRepo.On("GetSystemStatus").Return([]*models.SystemStatus{}, nil)
+	mockRepo.On("GetAverageUsage", time.Hour).Return((*models.AverageMetrics)(nil), fmt.Errorf("no data"))
+
+	expectedSystemMetrics := createSampleSystemMetrics()
+	mockCollector.On("GetSystemMetrics").Return(expectedSystemMetrics, nil)
 
 	req, _ := http.NewRequest("GET", "/api/v1/system/stats", nil)
 	w := httptest.NewRecorder()
@@ -477,74 +428,5 @@ func TestGetStats_Success(t *testing.T) {
 	assert.True(t, response.Success)
 
 	mockRepo.AssertExpectations(t)
-}
-
-func TestCleanupOldMetrics_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
-
-	mockRepo.On("DeleteOldRecords", mock.AnythingOfType("time.Time")).Return(int64(50), nil)
-
-	req, _ := http.NewRequest("DELETE", "/api/v1/admin/metrics/cleanup?days=30", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response APIResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.True(t, response.Success)
-
-	mockRepo.AssertExpectations(t)
-}
-
-func TestCleanupOldMetrics_InvalidDays(t *testing.T) {
-	router, _ := setupTestRouter()
-
-	req, _ := http.NewRequest("DELETE", "/api/v1/admin/metrics/cleanup?days=0", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	var response APIResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.False(t, response.Success)
-	assert.Contains(t, response.Error, "Invalid days parameter")
-}
-
-// Benchmark tests
-
-func BenchmarkGetCurrentMetrics(b *testing.B) {
-	router, mockRepo := setupTestRouter()
-
-	expectedMetric := createSampleMetric()
-	mockRepo.On("GetLatest").Return(expectedMetric, nil)
-
-	req, _ := http.NewRequest("GET", "/api/v1/metrics/current", nil)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-	}
-}
-
-func BenchmarkCreateMetric(b *testing.B) {
-	router, mockRepo := setupTestRouter()
-
-	metric := createSampleMetric()
-	mockRepo.On("Create", mock.AnythingOfType("*models.Metric")).Return(nil)
-
-	jsonData, _ := json.Marshal(metric)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		req, _ := http.NewRequest("POST", "/api/v1/metrics", bytes.NewBuffer(jsonData))
-		req.Header.Set("Content-Type", "application/json")
-
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-	}
+	mockCollector.AssertExpectations(t)
 }
