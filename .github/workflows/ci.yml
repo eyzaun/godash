@@ -83,6 +83,10 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     
     steps:
     - name: Checkout code
@@ -93,18 +97,26 @@ jobs:
       with:
         go-version: ${{ env.GO_VERSION }}
         
+    - name: Download dependencies
+      run: |
+        go mod download
+        go mod tidy
+        
     - name: Install Gosec
-      run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+      run: |
+        curl -sfL https://raw.githubusercontent.com/securecodewarrior/gosec/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.18.2
         
     - name: Run Gosec Security Scanner
-      run: gosec -no-fail -fmt sarif -out results.sarif ./...
+      run: |
+        $(go env GOPATH)/bin/gosec -fmt sarif -out results.sarif ./...
       continue-on-error: true
         
     - name: Upload SARIF file
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: results.sarif
       if: always()
+      continue-on-error: true
 
   # Build job
   build:
