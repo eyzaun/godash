@@ -840,18 +840,18 @@ func (h *MetricsHandler) GetStats(c *gin.Context) {
 
 	// Get average metrics for last hour - DÜZELTİLMİŞ VERSİYON
 	averageMetrics, err := h.metricsRepo.GetAverageUsage(time.Hour)
-	avgCpu := 0.0
+	avgCPU := 0.0
 	avgMemory := 0.0
 
 	if err == nil && averageMetrics != nil && averageMetrics.SampleCount > 0 {
-		avgCpu = averageMetrics.AvgCPUUsage
+		avgCPU = averageMetrics.AvgCPUUsage
 		avgMemory = averageMetrics.AvgMemoryUsage
 	} else {
 		// Fallback: try to get current metrics if no historical data
 		if h.systemCollector != nil {
 			currentMetrics, collectorErr := h.systemCollector.GetSystemMetrics()
 			if collectorErr == nil {
-				avgCpu = currentMetrics.CPU.Usage
+				avgCPU = currentMetrics.CPU.Usage
 				avgMemory = currentMetrics.Memory.Percent
 			}
 		}
@@ -860,7 +860,7 @@ func (h *MetricsHandler) GetStats(c *gin.Context) {
 	stats := map[string]interface{}{
 		"total_metrics":    totalCount,
 		"total_hosts":      totalHosts,
-		"avg_cpu_usage":    avgCpu,
+		"avg_cpu_usage":    avgCPU,
 		"avg_memory_usage": avgMemory,
 		"timestamp":        time.Now(),
 	}
