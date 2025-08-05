@@ -30,7 +30,6 @@ type CollectorService struct {
 	// Statistics
 	collectionsCount   int64
 	lastCollectionTime time.Time
-	errors             []error
 }
 
 // NewCollectorService creates a new collector service
@@ -53,11 +52,10 @@ func NewCollectorService(cfg *config.Config, metricsRepo repository.MetricsRepos
 		metricsRepo:     metricsRepo,
 		config:          cfg,
 		stopChan:        make(chan bool, 1),
-		errors:          make([]error, 0),
 	}
 }
 
-// GetSystemCollector returns the system collector (YENİ METOD)
+// GetSystemCollector returns the system collector
 func (cs *CollectorService) GetSystemCollector() collector.Collector {
 	return cs.systemCollector
 }
@@ -135,7 +133,6 @@ func (cs *CollectorService) processMetrics() {
 			}
 
 			if err := cs.storeMetrics(metrics); err != nil {
-				cs.recordError(fmt.Errorf("failed to store metrics: %w", err))
 				log.Printf("❌ Error storing metrics: %v", err)
 			} else {
 				cs.mutex.Lock()
@@ -187,7 +184,6 @@ func (cs *CollectorService) startCleanupRoutine() {
 		select {
 		case <-ticker.C:
 			if err := cs.cleanupOldMetrics(); err != nil {
-				cs.recordError(fmt.Errorf("cleanup failed: %w", err))
 				log.Printf("❌ Error during metrics cleanup: %v", err)
 			}
 
@@ -214,141 +210,4 @@ func (cs *CollectorService) cleanupOldMetrics() error {
 	}
 
 	return nil
-}
-
-// recordError records an error for statistics
-func (cs *CollectorService) recordError(err error) {
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
-
-	cs.errors = append(cs.errors, err)
-
-	// Keep only last 10 errors
-	if len(cs.errors) > 10 {
-		cs.errors = cs.errors[len(cs.errors)-10:]
-	}
-}
-
-// GetStats returns service statistics
-func (cs *CollectorService) GetStats() map[string]interface{} {
-	cs.mutex.RLock()
-	defer cs.mutex.RUnlock()
-
-	return map[string]interface{}{
-		"is_running":           cs.isRunning,
-		"collections_count":    cs.collectionsCount,
-		"last_collection_time": cs.lastCollectionTime,
-		"error_count":          len(cs.errors),
-		"collection_interval":  cs.config.Metrics.CollectionInterval,
-		"retention_days":       cs.config.Metrics.RetentionDays,
-		"enabled_metrics": map[string]bool{
-			"cpu":       cs.config.Metrics.EnableCPU,
-			"memory":    cs.config.Metrics.EnableMemory,
-			"disk":      cs.config.Metrics.EnableDisk,
-			"network":   cs.config.Metrics.EnableNetwork,
-			"processes": cs.config.Metrics.EnableProcesses,
-		},
-	}
-}
-
-// GetLastErrors returns the last recorded errors
-func (cs *CollectorService) GetLastErrors() []error {
-	cs.mutex.RLock()
-	defer cs.mutex.RUnlock()
-
-	// Return a copy of the errors slice
-	errors := make([]error, len(cs.errors))
-	copy(errors, cs.errors)
-	return errors
-}
-
-// IsRunning returns whether the service is currently running
-func (cs *CollectorService) IsRunning() bool {
-	cs.mutex.RLock()
-	defer cs.mutex.RUnlock()
-	return cs.isRunning
-}
-
-// ForceCollection triggers an immediate metrics collection
-func (cs *CollectorService) ForceCollection() (*models.SystemMetrics, error) {
-	if cs.systemCollector == nil {
-		return nil, fmt.Errorf("system collector is not available")
-	}
-
-	metrics, err := cs.systemCollector.GetSystemMetrics()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get system metrics: %w", err)
-	}
-
-	// Store the metrics
-	if err := cs.storeMetrics(metrics); err != nil {
-		// Log error but still return the metrics
-		log.Printf("❌ Warning: failed to store forced collection metrics: %v", err)
-	}
-
-	return metrics, nil
-}
-
-// GetCurrentMetrics returns current system metrics without storing them
-func (cs *CollectorService) GetCurrentMetrics() (*models.SystemMetrics, error) {
-	if cs.systemCollector == nil {
-		return nil, fmt.Errorf("system collector is not available")
-	}
-
-	return cs.systemCollector.GetSystemMetrics()
-}
-
-// GetSystemInfo returns current system information
-func (cs *CollectorService) GetSystemInfo() (*models.SystemInfo, error) {
-	if cs.systemCollector == nil {
-		return nil, fmt.Errorf("system collector is not available")
-	}
-
-	return cs.systemCollector.GetSystemInfo()
-}
-
-// HealthCheck checks if the collector service is healthy
-func (cs *CollectorService) HealthCheck() (bool, []string, error) {
-	cs.mutex.RLock()
-	defer cs.mutex.RUnlock()
-
-	issues := []string{}
-	healthy := true
-
-	// Check if service is running
-	if !cs.isRunning {
-		healthy = false
-		issues = append(issues, "Collector service is not running")
-	}
-
-	// Check if recent collection happened
-	if cs.isRunning && !cs.lastCollectionTime.IsZero() {
-		timeSinceLastCollection := time.Since(cs.lastCollectionTime)
-		maxExpectedInterval := cs.config.Metrics.CollectionInterval * 3
-
-		if timeSinceLastCollection > maxExpectedInterval {
-			healthy = false
-			issues = append(issues, fmt.Sprintf("No metrics collected for %v", timeSinceLastCollection))
-		}
-	}
-
-	// Check error count
-	if len(cs.errors) > 5 {
-		healthy = false
-		issues = append(issues, fmt.Sprintf("High error count: %d recent errors", len(cs.errors)))
-	}
-
-	// Check system collector health if available
-	if cs.systemCollector != nil {
-		systemHealthy, systemIssues, err := cs.systemCollector.IsHealthy()
-		if err != nil {
-			healthy = false
-			issues = append(issues, fmt.Sprintf("System collector health check failed: %v", err))
-		} else if !systemHealthy {
-			healthy = false
-			issues = append(issues, systemIssues...)
-		}
-	}
-
-	return healthy, issues, nil
 }

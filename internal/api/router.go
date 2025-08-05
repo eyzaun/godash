@@ -73,18 +73,31 @@ func (r *Router) setupMiddleware() {
 	// Request ID middleware
 	r.engine.Use(middleware.RequestID())
 
-	// CORS middleware
+	// CORS middleware with simplified configuration
 	r.engine.Use(cors.New(cors.Config{
-		AllowOrigins:     r.config.Server.CORS.AllowOrigins,
-		AllowMethods:     r.config.Server.CORS.AllowMethods,
-		AllowHeaders:     r.config.Server.CORS.AllowHeaders,
-		ExposeHeaders:    r.config.Server.CORS.ExposeHeaders,
-		AllowCredentials: r.config.Server.CORS.AllowCredentials,
-		MaxAge:           r.config.Server.CORS.MaxAge,
+		AllowOrigins: []string{
+			"http://localhost:8080",
+			"http://127.0.0.1:8080",
+			"http://localhost:8082",
+			"http://127.0.0.1:8082",
+			"http://localhost:3000", // Development
+		},
+		AllowMethods: []string{
+			"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD",
+		},
+		AllowHeaders: []string{
+			"Origin", "Content-Type", "Accept", "Authorization",
+			"X-Requested-With", "X-Client-ID",
+		},
+		ExposeHeaders: []string{
+			"Content-Length", "X-Request-ID",
+		},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
 	}))
 
-	// Rate limiting middleware (if needed)
-	if !r.config.IsDevelopment() {
+	// Rate limiting middleware (only in production)
+	if r.config.Server.Mode == "release" {
 		r.engine.Use(middleware.RateLimit())
 	}
 
@@ -154,11 +167,11 @@ func (r *Router) setupRoutes() {
 			})
 		}
 
-		// Admin routes (protected)
+		// Admin routes (protected in production)
 		adminGroup := v1.Group("/admin")
 		{
-			// Authentication middleware for admin routes
-			if !r.config.IsDevelopment() {
+			// Authentication middleware for admin routes (only in production)
+			if r.config.Server.Mode == "release" {
 				adminGroup.Use(middleware.BasicAuth())
 			}
 

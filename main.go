@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -87,7 +86,9 @@ func initializeApplication() (*Application, error) {
 	// Run database migrations
 	if err := db.AutoMigrate(); err != nil {
 		return nil, fmt.Errorf("failed to run database migrations: %w", err)
-	} // Initialize repositories
+	}
+
+	// Initialize repositories
 	metricsRepo := repository.NewMetricsRepository(db.DB)
 
 	// Initialize services
@@ -126,6 +127,7 @@ func (app *Application) run(ctx context.Context) error {
 	serverErrors := make(chan error, 1)
 	go func() {
 		log.Printf("Starting HTTP server on %s", app.config.GetServerAddress())
+		log.Printf("Dashboard available at: http://%s/", app.config.GetServerAddress())
 		log.Printf("API documentation available at: http://%s/api/v1/", app.config.GetServerAddress())
 		log.Printf("Health check available at: http://%s/health", app.config.GetServerAddress())
 
@@ -183,56 +185,4 @@ func (app *Application) shutdown() error {
 
 	log.Println("Graceful shutdown completed successfully")
 	return nil
-}
-
-// PrintSystemInfo prints system and configuration information
-func (app *Application) PrintSystemInfo() {
-	fmt.Println("\n" + strings.Repeat("=", 60))
-	fmt.Printf("  %s System Monitor v%s\n", AppName, AppVersion)
-	fmt.Println(strings.Repeat("=", 60))
-
-	fmt.Printf("Server Address: %s\n", app.config.GetServerAddress())
-	fmt.Printf("Database: %s:%d/%s\n",
-		app.config.Database.Host,
-		app.config.Database.Port,
-		app.config.Database.Name)
-	fmt.Printf("Collection Interval: %v\n", app.config.Metrics.CollectionInterval)
-	fmt.Printf("Retention Days: %d\n", app.config.Metrics.RetentionDays)
-	fmt.Printf("Environment: %s\n", app.config.Server.Mode)
-
-	fmt.Println("\nEnabled Metrics:")
-	fmt.Printf("  CPU: %v\n", app.config.Metrics.EnableCPU)
-	fmt.Printf("  Memory: %v\n", app.config.Metrics.EnableMemory)
-	fmt.Printf("  Disk: %v\n", app.config.Metrics.EnableDisk)
-	fmt.Printf("  Network: %v\n", app.config.Metrics.EnableNetwork)
-	fmt.Printf("  Processes: %v\n", app.config.Metrics.EnableProcesses)
-
-	fmt.Println("\nAPI Endpoints:")
-	fmt.Printf("  Health Check: http://%s/health\n", app.config.GetServerAddress())
-	fmt.Printf("  Current Metrics: http://%s/api/v1/metrics/current\n", app.config.GetServerAddress())
-	fmt.Printf("  Metrics History: http://%s/api/v1/metrics/history\n", app.config.GetServerAddress())
-	fmt.Printf("  System Status: http://%s/api/v1/system/status\n", app.config.GetServerAddress())
-
-	fmt.Println(strings.Repeat("=", 60) + "\n")
-}
-
-// validateEnvironment checks if the environment is properly configured
-func validateEnvironment() error {
-	// Check if we're running in a container
-	if _, err := os.Stat("/.dockerenv"); err == nil {
-		log.Println("Running in Docker container")
-	}
-
-	// Check available memory
-	// In production, you might want to check system resources
-
-	return nil
-}
-
-// init function runs before main
-func init() {
-	// Validate environment on startup
-	if err := validateEnvironment(); err != nil {
-		log.Fatalf("Environment validation failed: %v", err)
-	}
 }
