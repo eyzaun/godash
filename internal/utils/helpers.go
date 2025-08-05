@@ -9,24 +9,32 @@ import (
 	"time"
 )
 
+// Health status constants
+const (
+	HealthStatusHealthy  = "healthy"
+	HealthStatusWarning  = "warning"
+	HealthStatusCritical = "critical"
+	HealthStatusUnknown  = "unknown"
+)
+
 // FormatBytes converts bytes to human readable format
 func FormatBytes(bytes uint64) string {
 	const unit = 1024
 	if bytes < unit {
 		return fmt.Sprintf("%d B", bytes)
 	}
-	
+
 	div, exp := uint64(unit), 0
 	for n := bytes / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
-	
+
 	units := []string{"KB", "MB", "GB", "TB", "PB", "EB"}
 	if exp >= len(units) {
 		exp = len(units) - 1
 	}
-	
+
 	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), units[exp])
 }
 
@@ -36,30 +44,30 @@ func FormatBytesDecimal(bytes uint64) string {
 	if bytes < unit {
 		return fmt.Sprintf("%d B", bytes)
 	}
-	
+
 	div, exp := uint64(unit), 0
 	for n := bytes / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
-	
+
 	units := []string{"kB", "MB", "GB", "TB", "PB", "EB"}
 	if exp >= len(units) {
 		exp = len(units) - 1
 	}
-	
+
 	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), units[exp])
 }
 
 // ParseBytes parses human readable bytes string to uint64
 func ParseBytes(s string) (uint64, error) {
 	s = strings.TrimSpace(strings.ToUpper(s))
-	
+
 	// Handle empty string
 	if s == "" {
 		return 0, fmt.Errorf("empty string")
 	}
-	
+
 	// Define units in order of priority (longest first to avoid conflicts)
 	unitPairs := []struct {
 		suffix     string
@@ -72,37 +80,37 @@ func ParseBytes(s string) (uint64, error) {
 		{"KB", 1024},
 		{"B", 1},
 	}
-	
+
 	// Try to match units
 	for _, unit := range unitPairs {
 		if strings.HasSuffix(s, unit.suffix) {
 			numStr := strings.TrimSuffix(s, unit.suffix)
 			numStr = strings.TrimSpace(numStr)
-			
+
 			if numStr == "" {
 				return 0, fmt.Errorf("no number specified before unit %s", unit.suffix)
 			}
-			
+
 			var num float64
 			if _, err := fmt.Sscanf(numStr, "%f", &num); err != nil {
 				return 0, fmt.Errorf("invalid number format: %s", numStr)
 			}
-			
+
 			if num < 0 {
 				return 0, fmt.Errorf("negative numbers not allowed: %f", num)
 			}
-			
+
 			result := uint64(num * float64(unit.multiplier))
 			return result, nil
 		}
 	}
-	
+
 	// If no unit specified, assume bytes
 	var num uint64
 	if _, err := fmt.Sscanf(s, "%d", &num); err != nil {
 		return 0, fmt.Errorf("invalid bytes format: %s", s)
 	}
-	
+
 	return num, nil
 }
 
@@ -111,19 +119,19 @@ func FormatDuration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%.0fs", d.Seconds())
 	}
-	
+
 	if d < time.Hour {
 		minutes := int(d.Minutes())
 		seconds := int(d.Seconds()) % 60
 		return fmt.Sprintf("%dm%ds", minutes, seconds)
 	}
-	
+
 	if d < 24*time.Hour {
 		hours := int(d.Hours())
 		minutes := int(d.Minutes()) % 60
 		return fmt.Sprintf("%dh%dm", hours, minutes)
 	}
-	
+
 	days := int(d.Hours()) / 24
 	hours := int(d.Hours()) % 24
 	return fmt.Sprintf("%dd%dh", days, hours)
@@ -141,13 +149,13 @@ func RoundFloat(val float64, precision int) float64 {
 	return math.Round(val*ratio) / ratio
 }
 
-// ClampFloat clamps float64 value between min and max
-func ClampFloat(val, min, max float64) float64 {
-	if val < min {
-		return min
+// ClampFloat clamps float64 value between minVal and maxVal
+func ClampFloat(val, minVal, maxVal float64) float64 {
+	if val < minVal {
+		return minVal
 	}
-	if val > max {
-		return max
+	if val > maxVal {
+		return maxVal
 	}
 	return val
 }
@@ -219,7 +227,7 @@ func FileExists(filename string) bool {
 // CreateDirIfNotExists creates directory if it doesn't exist
 func CreateDirIfNotExists(dir string) error {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return os.MkdirAll(dir, 0755)
+		return os.MkdirAll(dir, 0o755)
 	}
 	return nil
 }
@@ -306,7 +314,7 @@ func GetMemoryPressureLevel(percent float64) string {
 	case percent < 90:
 		return "high"
 	default:
-		return "critical"
+		return HealthStatusCritical
 	}
 }
 
@@ -314,11 +322,11 @@ func GetMemoryPressureLevel(percent float64) string {
 func GetDiskHealthLevel(percent float64) string {
 	switch {
 	case percent < 80:
-		return "healthy"
+		return HealthStatusHealthy
 	case percent < 90:
-		return "warning"
+		return HealthStatusWarning
 	default:
-		return "critical"
+		return HealthStatusCritical
 	}
 }
 
@@ -332,7 +340,7 @@ func GetCPULoadLevel(percent float64) string {
 	case percent < 95:
 		return "high"
 	default:
-		return "critical"
+		return HealthStatusCritical
 	}
 }
 
@@ -341,7 +349,7 @@ func FormatUptime(uptime time.Duration) string {
 	days := int(uptime.Hours()) / 24
 	hours := int(uptime.Hours()) % 24
 	minutes := int(uptime.Minutes()) % 60
-	
+
 	if days > 0 {
 		return fmt.Sprintf("%d days, %d hours, %d minutes", days, hours, minutes)
 	}
@@ -378,13 +386,13 @@ func SanitizeHostname(hostname string) string {
 		}
 		return '_'
 	}, hostname)
-	
+
 	// Remove leading/trailing dots and dashes
 	sanitized = strings.Trim(sanitized, ".-")
-	
+
 	if sanitized == "" {
 		return "unknown"
 	}
-	
+
 	return sanitized
 }

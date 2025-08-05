@@ -10,6 +10,7 @@ import (
 
 	"github.com/eyzaun/godash/internal/models"
 	"github.com/eyzaun/godash/internal/repository"
+	"github.com/eyzaun/godash/internal/utils"
 )
 
 // HealthHandler handles health check endpoints
@@ -67,20 +68,20 @@ type ServiceStatus struct {
 // @Router /health [get]
 func (h *HealthHandler) HealthCheck(c *gin.Context) {
 	checks := make(map[string]HealthCheck)
-	overallStatus := "healthy"
+	overallStatus := utils.HealthStatusHealthy
 
 	// Database health check
 	dbCheck := h.checkDatabase()
 	checks["database"] = dbCheck
-	if dbCheck.Status != "healthy" {
+	if dbCheck.Status != utils.HealthStatusHealthy {
 		overallStatus = "unhealthy"
 	}
 
 	// Memory health check
 	memCheck := h.checkMemory()
 	checks["memory"] = memCheck
-	if memCheck.Status == "warning" && overallStatus == "healthy" {
-		overallStatus = "warning"
+	if memCheck.Status == utils.HealthStatusWarning && overallStatus == utils.HealthStatusHealthy {
+		overallStatus = utils.HealthStatusWarning
 	}
 
 	// Goroutines health check

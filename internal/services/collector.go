@@ -152,7 +152,7 @@ func (cs *CollectorService) processMetrics() {
 			return
 
 		case <-cs.ctx.Done():
-			log.Println("📊 Context cancelled, stopping metrics processing")
+			log.Println("📊 Context canceled, stopping metrics processing")
 			return
 		}
 	}
@@ -192,7 +192,7 @@ func (cs *CollectorService) startCleanupRoutine() {
 			}
 
 		case <-cs.ctx.Done():
-			log.Println("🧹 Context cancelled, stopping cleanup routine")
+			log.Println("🧹 Context canceled, stopping cleanup routine")
 			return
 		}
 	}

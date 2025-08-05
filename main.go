@@ -58,10 +58,12 @@ func main() {
 	// Initialize and run the application
 	app, err := initializeApplication()
 	if err != nil {
+		cancel()
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
 
 	if err := app.run(ctx); err != nil {
+		cancel()
 		log.Fatalf("Application error: %v", err)
 	}
 

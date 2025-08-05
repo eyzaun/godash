@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/eyzaun/godash/internal/models"
+	"github.com/eyzaun/godash/internal/utils"
 	"github.com/shirou/gopsutil/v3/process"
 )
 
@@ -83,7 +84,7 @@ func (p *ProcessCollector) getTopProcesses(limit int) ([]models.ProcessInfo, err
 
 		name, err := proc.Name()
 		if err != nil {
-			name = "unknown"
+			name = utils.HealthStatusUnknown
 		}
 
 		cpuPercent, err := proc.CPUPercent()
@@ -100,11 +101,11 @@ func (p *ProcessCollector) getTopProcesses(limit int) ([]models.ProcessInfo, err
 		statuses, err := proc.Status()
 		var status string
 		if err != nil {
-			status = "unknown"
+			status = utils.HealthStatusUnknown
 		} else if len(statuses) > 0 {
 			status = statuses[0]
 		} else {
-			status = "unknown"
+			status = utils.HealthStatusUnknown
 		}
 
 		processes = append(processes, models.ProcessInfo{

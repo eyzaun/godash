@@ -1,8 +1,6 @@
 module github.com/eyzaun/godash
 
-go 1.23.0
-
-toolchain go1.24.5
+go 1.21
 
 require (
 	github.com/fatih/color v1.18.0
