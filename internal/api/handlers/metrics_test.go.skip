@@ -172,10 +172,10 @@ func setupTestRouter() (*gin.Engine, *MockMetricsRepository, *MockSystemCollecto
 	gin.SetMode(gin.TestMode)
 
 	mockRepo := new(MockMetricsRepository)
-
+	
 	// Create a simple mock that won't panic
 	mockCollector := &MockSystemCollector{}
-
+	
 	handler := NewMetricsHandler(mockRepo, mockCollector)
 
 	router := gin.New()
@@ -219,7 +219,7 @@ func createSampleMetric() *models.Metric {
 
 func TestGetCurrentMetrics_Success(t *testing.T) {
 	t.Skip("Temporarily skipping due to interface refactoring")
-
+	
 	router, mockRepo, mockCollector := setupTestRouter()
 
 	expectedMetric := createSampleMetric()

@@ -3,6 +3,13 @@ run:
   timeout: 5m
   tests: true
 
+# Output configuration
+output:
+  formats:
+    - format: github-actions
+  print-issued-lines: true
+  print-linter-name: true
+
 # Enable specific linters
 linters:
   enable:
@@ -20,10 +27,10 @@ linters:
     - dogsled
     - nakedret
     - prealloc
-    - copyloopvar  # Replaced exportloopref
+    - copyloopvar
     - gocritic
   disable:
-    - exportloopref  # Deprecated since Go 1.22
+    - exportloopref
 
 # Configure linters
 linters-settings:
@@ -51,7 +58,7 @@ linters-settings:
       - wrapperFunc
       - dupImport
 
-# Issues configuration
+# Issues configuration (consolidated)
 issues:
   exclude-use-default: false
   exclude-dirs:
@@ -61,31 +68,13 @@ issues:
     - ".*\\.pb\\.go$"
     - ".*\\.gen\\.go$"
   exclude-rules:
-    # Disable linters that are annoying in tests.
     - path: "_test\\.go"
       linters:
         - gocyclo
         - errcheck
         - dupl
         - gosec
-
-  # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
   max-issues-per-linter: 0
-
-  # Maximum count of issues with the same text. Set to 0 to disable. Default is 3.
   max-same-issues: 0
-
-  # Show only new issues: if there are unstaged changes or untracked files,
-  # only those changes are analyzed, else only changes in HEAD~ are analyzed.
   new: false
-
-# Output configuration options
-output:
-  formats:
-    - format: colored-line-number
-  print-issued-lines: true
-  print-linter-name: true
-
-# Issues configuration
-issues:
   uniq-by-line: true
