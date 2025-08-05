@@ -191,6 +191,11 @@ func (h *WebSocketHandler) HandleWebSocket(c *gin.Context) {
 
 // BroadcastMetrics broadcasts detailed metrics to all connected clients (SPEED FIELDS ADDED)
 func (h *WebSocketHandler) BroadcastMetrics(metrics *models.SystemMetrics) {
+	if metrics == nil {
+		log.Printf("Warning: received nil metrics for broadcast")
+		return
+	}
+
 	// Get system info for additional details
 	systemInfo, err := h.systemCollector.GetSystemInfo()
 	if err != nil {
@@ -252,10 +257,13 @@ func (h *WebSocketHandler) BroadcastMetrics(metrics *models.SystemMetrics) {
 	detailedMetrics.NetworkErrors = totalErrors
 	detailedMetrics.NetworkDrops = totalDrops
 
-	// Add system info if available
+	// Add system info if available (FIX: Proper nil check)
 	if systemInfo != nil {
 		detailedMetrics.Platform = systemInfo.Platform
 		detailedMetrics.ProcessCount = systemInfo.Processes
+	} else {
+		detailedMetrics.Platform = "Unknown"
+		detailedMetrics.ProcessCount = 0
 	}
 
 	// Add process activity data
@@ -318,12 +326,17 @@ func (h *WebSocketHandler) BroadcastSystemStatus() {
 		"network_recv":  systemMetrics.Network.TotalReceived,
 	}
 
-	// Add system info if available
+	// Add system info if available (FIX: Proper nil check)
 	if systemInfo != nil {
 		status["platform"] = systemInfo.Platform
 		status["platform_version"] = systemInfo.PlatformVersion
 		status["kernel_arch"] = systemInfo.KernelArch
 		status["process_count"] = systemInfo.Processes
+	} else {
+		status["platform"] = "Unknown"
+		status["platform_version"] = "Unknown"
+		status["kernel_arch"] = "Unknown"
+		status["process_count"] = uint64(0)
 	}
 
 	message := WebSocketMessage{
@@ -355,6 +368,9 @@ func (h *WebSocketHandler) BroadcastSystemStatus() {
 
 // GetConnectedClients returns the number of connected WebSocket clients
 func (h *WebSocketHandler) GetConnectedClients() int {
+	if h.hub == nil {
+		return 0
+	}
 	h.hub.mutex.RLock()
 	defer h.hub.mutex.RUnlock()
 	return len(h.hub.clients)
@@ -362,6 +378,14 @@ func (h *WebSocketHandler) GetConnectedClients() int {
 
 // GetClientStats returns WebSocket client statistics
 func (h *WebSocketHandler) GetClientStats() map[string]interface{} {
+	if h.hub == nil {
+		return map[string]interface{}{
+			"connected_clients": 0,
+			"total_connections": 0,
+			"broadcast_queue":   0,
+		}
+	}
+
 	h.hub.mutex.RLock()
 	defer h.hub.mutex.RUnlock()
 
@@ -426,6 +450,10 @@ func (h *Hub) run() {
 
 // sendInitialData sends initial system data to a new client
 func (h *Hub) sendInitialData(client *Client) {
+	if client == nil {
+		return
+	}
+
 	// Send connection confirmation
 	initialMessage := WebSocketMessage{
 		Type:      "connected",
@@ -467,13 +495,24 @@ const (
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			log.Printf("Error closing WebSocket connection: %v", err)
+		}
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+
+	// FIX: Handle SetReadDeadline error
+	if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+		log.Printf("Error setting read deadline: %v", err)
+		return
+	}
+
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		// FIX: Handle SetReadDeadline error in pong handler
+		if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+			log.Printf("Error setting read deadline in pong handler: %v", err)
+		}
 		c.lastPing = time.Now()
 		return nil
 	})
@@ -497,39 +536,68 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			log.Printf("Error closing WebSocket connection: %v", err)
+		}
 	}()
 
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			// FIX: Handle SetWriteDeadline error
+			if err := c.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				log.Printf("Error setting write deadline: %v", err)
+				return
+			}
+
 			if !ok {
 				// The hub closed the channel
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				// FIX: Handle WriteMessage error
+				if err := c.conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
+					log.Printf("Error writing close message: %v", err)
+				}
 				return
 			}
 
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
+				log.Printf("Error getting next writer: %v", err)
 				return
 			}
-			w.Write(message)
+
+			// FIX: Handle w.Write errors
+			if _, err := w.Write(message); err != nil {
+				log.Printf("Error writing message: %v", err)
+				return
+			}
 
 			// Add queued messages to the current WebSocket message
 			n := len(c.send)
 			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-c.send)
+				if _, err := w.Write([]byte{'\n'}); err != nil {
+					log.Printf("Error writing newline: %v", err)
+					return
+				}
+				if _, err := w.Write(<-c.send); err != nil {
+					log.Printf("Error writing queued message: %v", err)
+					return
+				}
 			}
 
 			if err := w.Close(); err != nil {
+				log.Printf("Error closing writer: %v", err)
 				return
 			}
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			// FIX: Handle SetWriteDeadline error for ping
+			if err := c.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				log.Printf("Error setting write deadline for ping: %v", err)
+				return
+			}
+
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				log.Printf("Error writing ping message: %v", err)
 				return
 			}
 		}
