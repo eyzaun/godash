@@ -152,7 +152,7 @@ func (cs *CollectorService) processMetrics() {
 			log.Println("📊 Received stop signal, stopping metrics processing")
 			return
 
-		case <-ctx.Done():
+		case <-cs.ctx.Done():
 			log.Println("📊 Context canceled, stopping metrics processing")
 			return
 		}
