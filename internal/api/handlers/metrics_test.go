@@ -526,7 +526,15 @@ func TestGetStats_Success(t *testing.T) {
 	mockRepo.On("GetSystemStatus").Return([]*models.SystemStatus{
 		{Hostname: "test-host", Timestamp: time.Now(), Status: "online"},
 	}, nil)
-	mockRepo.On("GetAverageUsage", time.Hour).Return(75.5, 65.2, 45.8, nil)
+
+	expectedAverageMetrics := &models.AverageMetrics{
+		AvgCPUUsage:    75.5,
+		AvgMemoryUsage: 65.2,
+		AvgDiskUsage:   45.8,
+		Duration:       time.Hour,
+		SampleCount:    100,
+	}
+	mockRepo.On("GetAverageUsage", time.Hour).Return(expectedAverageMetrics, nil)
 
 	req, _ := http.NewRequest("GET", "/api/v1/system/stats", nil)
 	w := httptest.NewRecorder()

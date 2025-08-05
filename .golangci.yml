@@ -3,12 +3,6 @@ run:
   timeout: 5m
   issues-exit-code: 1
   tests: true
-  skip-dirs:
-    - vendor
-    - node_modules
-  skip-files:
-    - ".*\\.pb\\.go$"
-    - ".*\\.gen\\.go$"
 
 # Output configuration
 output:
@@ -36,8 +30,6 @@ linters:
     - unparam
     - nakedret
     - prealloc
-  disable:
-    - exportloopref # Deprecated, replaced with copyloopvar
 
 # Configure linters
 linters-settings:
