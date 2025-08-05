@@ -72,9 +72,9 @@ func printHeader(noColor bool) {
 		fmt.Println("=" + strings.Repeat("=", 50) + "=")
 	} else {
 		cyan := color.New(color.FgCyan, color.Bold)
-		cyan.Println("=" + strings.Repeat("=", 50) + "=")
-		cyan.Println("                 GoDash System Monitor")
-		cyan.Println("=" + strings.Repeat("=", 50) + "=")
+		_, _ = cyan.Println("=" + strings.Repeat("=", 50) + "=")
+		_, _ = cyan.Println("                 GoDash System Monitor")
+		_, _ = cyan.Println("=" + strings.Repeat("=", 50) + "=")
 	}
 }
 
@@ -88,13 +88,13 @@ func printSystemInfo(systemInfo *models.SystemInfo, noColor bool) {
 	} else {
 		bold := color.New(color.Bold)
 		fmt.Print("System: ")
-		bold.Printf("%s %s (%s)\n", systemInfo.Platform, systemInfo.PlatformVersion, systemInfo.KernelArch)
+		_, _ = bold.Printf("%s %s (%s)\n", systemInfo.Platform, systemInfo.PlatformVersion, systemInfo.KernelArch)
 		fmt.Print("Kernel: ")
-		bold.Printf("%s\n", systemInfo.KernelVersion)
+		_, _ = bold.Printf("%s\n", systemInfo.KernelVersion)
 		fmt.Print("Uptime: ")
-		bold.Printf("%s\n", time.Since(systemInfo.BootTime).Round(time.Minute))
+		_, _ = bold.Printf("%s\n", time.Since(systemInfo.BootTime).Round(time.Minute))
 		fmt.Print("Processes: ")
-		bold.Printf("%d\n", systemInfo.Processes)
+		_, _ = bold.Printf("%d\n", systemInfo.Processes)
 	}
 	fmt.Println()
 }
@@ -108,7 +108,7 @@ func printMetrics(metrics *models.SystemMetrics, noColor bool) {
 		fmt.Println(strings.Repeat("-", 60))
 	} else {
 		cyan := color.New(color.FgCyan)
-		cyan.Printf("[%s] System Metrics for %s\n", timestamp, metrics.Hostname)
+		_, _ = cyan.Printf("[%s] System Metrics for %s\n", timestamp, metrics.Hostname)
 		fmt.Println(strings.Repeat("-", 60))
 	}
 
