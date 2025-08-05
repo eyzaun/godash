@@ -104,6 +104,16 @@ type DetailedMetricsResponse struct {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/metrics/current [get]
 func (h *MetricsHandler) GetCurrentMetrics(c *gin.Context) {
+	// FIX: Check if systemCollector is nil
+	if h.systemCollector == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "System collector not available",
+			Message: "System collector is not initialized",
+		})
+		return
+	}
+
 	// REAL-TIME VERİ: SystemCollector'dan direkt al
 	systemMetrics, err := h.systemCollector.GetSystemMetrics()
 	if err != nil {
@@ -111,6 +121,16 @@ func (h *MetricsHandler) GetCurrentMetrics(c *gin.Context) {
 			Success: false,
 			Error:   "Failed to retrieve current metrics",
 			Message: err.Error(),
+		})
+		return
+	}
+
+	// FIX: Check if systemMetrics is nil
+	if systemMetrics == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Failed to retrieve current metrics",
+			Message: "System metrics returned nil",
 		})
 		return
 	}
@@ -177,6 +197,16 @@ func (h *MetricsHandler) GetCurrentMetrics(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/metrics/current/{hostname} [get]
 func (h *MetricsHandler) GetCurrentMetricsByHostname(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	hostname := c.Param("hostname")
 
 	metrics, err := h.metricsRepo.GetLatestByHostname(hostname)
@@ -215,6 +245,16 @@ func (h *MetricsHandler) GetCurrentMetricsByHostname(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/metrics/history [get]
 func (h *MetricsHandler) GetMetricsHistory(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	// Parse query parameters
 	var from, to time.Time
 	var err error
@@ -305,6 +345,16 @@ func (h *MetricsHandler) GetMetricsHistory(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/metrics/trends [get]
 func (h *MetricsHandler) GetHistoricalTrends(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	timeRange := c.DefaultQuery("range", "1h")
 
 	var duration time.Duration
@@ -353,10 +403,13 @@ func (h *MetricsHandler) GetHistoricalTrends(c *gin.Context) {
 	var diskData []float64
 
 	for _, metric := range metrics {
-		labels = append(labels, metric.Timestamp.Format("15:04:05"))
-		cpuData = append(cpuData, metric.CPUUsage)
-		memoryData = append(memoryData, metric.MemoryPercent)
-		diskData = append(diskData, metric.DiskPercent)
+		// FIX: Check if metric is nil
+		if metric != nil {
+			labels = append(labels, metric.Timestamp.Format("15:04:05"))
+			cpuData = append(cpuData, metric.CPUUsage)
+			memoryData = append(memoryData, metric.MemoryPercent)
+			diskData = append(diskData, metric.DiskPercent)
+		}
 	}
 
 	// Reverse arrays to show chronological order
@@ -413,6 +466,16 @@ func (h *MetricsHandler) GetHistoricalTrends(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/metrics/history/{hostname} [get]
 func (h *MetricsHandler) GetMetricsHistoryByHostname(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	hostname := c.Param("hostname")
 
 	// Parse query parameters (same logic as GetMetricsHistory)
@@ -499,6 +562,16 @@ func (h *MetricsHandler) GetMetricsHistoryByHostname(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/metrics/average [get]
 func (h *MetricsHandler) GetAverageMetrics(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	durationStr := c.DefaultQuery("duration", "1h")
 
 	duration, err := time.ParseDuration(durationStr)
@@ -540,6 +613,16 @@ func (h *MetricsHandler) GetAverageMetrics(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/metrics/average/{hostname} [get]
 func (h *MetricsHandler) GetAverageMetricsByHostname(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	hostname := c.Param("hostname")
 	durationStr := c.DefaultQuery("duration", "1h")
 
@@ -582,6 +665,16 @@ func (h *MetricsHandler) GetAverageMetricsByHostname(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/metrics/summary [get]
 func (h *MetricsHandler) GetMetricsSummary(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	var from, to time.Time
 	var err error
 
@@ -640,6 +733,16 @@ func (h *MetricsHandler) GetMetricsSummary(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/metrics/trends/{hostname} [get]
 func (h *MetricsHandler) GetUsageTrends(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	hostname := c.Param("hostname")
 	hours, _ := strconv.Atoi(c.DefaultQuery("hours", "24"))
 
@@ -676,6 +779,16 @@ func (h *MetricsHandler) GetUsageTrends(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/metrics/top/{type} [get]
 func (h *MetricsHandler) GetTopHostsByUsage(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	metricType := c.Param("type")
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 
@@ -720,6 +833,16 @@ func (h *MetricsHandler) GetTopHostsByUsage(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/metrics [post]
 func (h *MetricsHandler) CreateMetric(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	var metric models.Metric
 
 	if err := c.ShouldBindJSON(&metric); err != nil {
@@ -762,6 +885,16 @@ func (h *MetricsHandler) CreateMetric(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/system/status [get]
 func (h *MetricsHandler) GetSystemStatus(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	status, err := h.metricsRepo.GetSystemStatus()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, APIResponse{
@@ -788,6 +921,16 @@ func (h *MetricsHandler) GetSystemStatus(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/system/hosts [get]
 func (h *MetricsHandler) GetHosts(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	// This is a simplified implementation
 	// In practice, you might want a dedicated method in the repository
 	status, err := h.metricsRepo.GetSystemStatus()
@@ -802,7 +945,10 @@ func (h *MetricsHandler) GetHosts(c *gin.Context) {
 
 	hosts := make([]string, len(status))
 	for i, s := range status {
-		hosts[i] = s.Hostname
+		// FIX: Check if s is nil
+		if s != nil {
+			hosts[i] = s.Hostname
+		}
 	}
 
 	c.JSON(http.StatusOK, APIResponse{
@@ -821,6 +967,16 @@ func (h *MetricsHandler) GetHosts(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/system/stats [get]
 func (h *MetricsHandler) GetStats(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	totalCount, err := h.metricsRepo.GetTotalCount()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, APIResponse{
@@ -850,7 +1006,8 @@ func (h *MetricsHandler) GetStats(c *gin.Context) {
 		// Fallback: try to get current metrics if no historical data
 		if h.systemCollector != nil {
 			currentMetrics, collectorErr := h.systemCollector.GetSystemMetrics()
-			if collectorErr == nil {
+			// FIX: Check if currentMetrics is nil
+			if collectorErr == nil && currentMetrics != nil {
 				avgCpu = currentMetrics.CPU.Usage
 				avgMemory = currentMetrics.Memory.Percent
 			}
@@ -883,6 +1040,16 @@ func (h *MetricsHandler) GetStats(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/admin/metrics/cleanup [delete]
 func (h *MetricsHandler) CleanupOldMetrics(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
 
 	if days <= 0 {

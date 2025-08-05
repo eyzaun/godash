@@ -137,12 +137,25 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 	metrics.Uptime = time.Duration(uptime) * time.Second
 	metrics.Timestamp = currentTime
 
-	// Collect CPU metrics
+	// Collect CPU metrics (FIX: Check if cpuCollector is nil)
 	if sc.enabledMetrics["cpu"] {
-		cpuMetrics, err := sc.cpuCollector.GetCPUMetrics()
-		if err != nil {
-			collectErrors = append(collectErrors, fmt.Errorf("failed to collect CPU metrics: %w", err))
-			// Set default values to avoid nil pointer issues
+		if sc.cpuCollector != nil {
+			cpuMetrics, err := sc.cpuCollector.GetCPUMetrics()
+			if err != nil {
+				collectErrors = append(collectErrors, fmt.Errorf("failed to collect CPU metrics: %w", err))
+				// Set default values to avoid nil pointer issues
+				metrics.CPU = models.CPUMetrics{
+					Usage:     0,
+					Cores:     1,
+					CoreUsage: []float64{0},
+					LoadAvg:   []float64{0, 0, 0},
+					Frequency: 0,
+				}
+			} else if cpuMetrics != nil {
+				metrics.CPU = *cpuMetrics
+			}
+		} else {
+			// Set default values if collector is nil
 			metrics.CPU = models.CPUMetrics{
 				Usage:     0,
 				Cores:     1,
@@ -150,17 +163,33 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 				LoadAvg:   []float64{0, 0, 0},
 				Frequency: 0,
 			}
-		} else {
-			metrics.CPU = *cpuMetrics
 		}
 	}
 
-	// Collect Memory metrics
+	// Collect Memory metrics (FIX: Check if memoryCollector is nil)
 	if sc.enabledMetrics["memory"] {
-		memoryMetrics, err := sc.memoryCollector.GetMemoryMetrics()
-		if err != nil {
-			collectErrors = append(collectErrors, fmt.Errorf("failed to collect memory metrics: %w", err))
-			// Set default values
+		if sc.memoryCollector != nil {
+			memoryMetrics, err := sc.memoryCollector.GetMemoryMetrics()
+			if err != nil {
+				collectErrors = append(collectErrors, fmt.Errorf("failed to collect memory metrics: %w", err))
+				// Set default values
+				metrics.Memory = models.MemoryMetrics{
+					Total:       1024 * 1024 * 1024, // 1GB default
+					Used:        0,
+					Available:   1024 * 1024 * 1024,
+					Free:        1024 * 1024 * 1024,
+					Cached:      0,
+					Buffers:     0,
+					Percent:     0,
+					SwapTotal:   0,
+					SwapUsed:    0,
+					SwapPercent: 0,
+				}
+			} else if memoryMetrics != nil {
+				metrics.Memory = *memoryMetrics
+			}
+		} else {
+			// Set default values if collector is nil
 			metrics.Memory = models.MemoryMetrics{
 				Total:       1024 * 1024 * 1024, // 1GB default
 				Used:        0,
@@ -173,17 +202,63 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 				SwapUsed:    0,
 				SwapPercent: 0,
 			}
-		} else {
-			metrics.Memory = *memoryMetrics
 		}
 	}
 
-	// Collect Disk metrics (SPEED CALCULATION ADDED)
+	// Collect Disk metrics (SPEED CALCULATION ADDED) (FIX: Check if diskCollector is nil)
 	if sc.enabledMetrics["disk"] {
-		diskMetrics, err := sc.diskCollector.GetDiskMetrics()
-		if err != nil {
-			collectErrors = append(collectErrors, fmt.Errorf("failed to collect disk metrics: %w", err))
-			// Set more realistic default values
+		if sc.diskCollector != nil {
+			diskMetrics, err := sc.diskCollector.GetDiskMetrics()
+			if err != nil {
+				collectErrors = append(collectErrors, fmt.Errorf("failed to collect disk metrics: %w", err))
+				// Set more realistic default values
+				metrics.Disk = models.DiskMetrics{
+					Total:   100 * 1024 * 1024 * 1024, // 100GB default
+					Used:    50 * 1024 * 1024 * 1024,  // 50GB used
+					Free:    50 * 1024 * 1024 * 1024,  // 50GB free
+					Percent: 50.0,                     // 50% used
+					Partitions: []models.PartitionInfo{
+						{
+							Device:     "/dev/sda1",
+							Mountpoint: "/",
+							Fstype:     "ext4",
+							Total:      100 * 1024 * 1024 * 1024,
+							Used:       50 * 1024 * 1024 * 1024,
+							Free:       50 * 1024 * 1024 * 1024,
+							Percent:    50.0,
+						},
+					},
+					IOStats: models.DiskIOStats{
+						ReadBytes:  1024 * 1024, // 1MB
+						WriteBytes: 1024 * 1024, // 1MB
+						ReadOps:    100,
+						WriteOps:   50,
+						ReadTime:   10,
+						WriteTime:  5,
+					},
+					ReadSpeed:  0, // Default to 0
+					WriteSpeed: 0, // Default to 0
+				}
+			} else if diskMetrics != nil {
+				metrics.Disk = *diskMetrics
+
+				// NEW: Calculate disk I/O speed
+				timeDiff := currentTime.Sub(sc.lastDiskTime)
+				if sc.lastDiskTime.IsZero() || timeDiff <= 0 {
+					// First measurement or invalid time diff
+					metrics.Disk.ReadSpeed = 0
+					metrics.Disk.WriteSpeed = 0
+				} else {
+					// Calculate speeds using helper method
+					metrics.Disk.CalculateDiskSpeed(sc.lastDiskStats, timeDiff)
+				}
+
+				// Store current stats for next calculation
+				sc.lastDiskStats = metrics.Disk.IOStats
+				sc.lastDiskTime = currentTime
+			}
+		} else {
+			// Set default values if collector is nil
 			metrics.Disk = models.DiskMetrics{
 				Total:   100 * 1024 * 1024 * 1024, // 100GB default
 				Used:    50 * 1024 * 1024 * 1024,  // 50GB used
@@ -211,23 +286,6 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 				ReadSpeed:  0, // Default to 0
 				WriteSpeed: 0, // Default to 0
 			}
-		} else {
-			metrics.Disk = *diskMetrics
-
-			// NEW: Calculate disk I/O speed
-			timeDiff := currentTime.Sub(sc.lastDiskTime)
-			if sc.lastDiskTime.IsZero() || timeDiff <= 0 {
-				// First measurement or invalid time diff
-				metrics.Disk.ReadSpeed = 0
-				metrics.Disk.WriteSpeed = 0
-			} else {
-				// Calculate speeds using helper method
-				metrics.Disk.CalculateDiskSpeed(sc.lastDiskStats, timeDiff)
-			}
-
-			// Store current stats for next calculation
-			sc.lastDiskStats = metrics.Disk.IOStats
-			sc.lastDiskTime = currentTime
 		}
 	}
 
@@ -254,7 +312,7 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 				UploadSpeed:   0, // Default to 0
 				DownloadSpeed: 0, // Default to 0
 			}
-		} else {
+		} else if networkMetrics != nil {
 			metrics.Network = *networkMetrics
 
 			// NEW: Calculate network speed
@@ -275,12 +333,25 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 		}
 	}
 
-	// Collect Process metrics
+	// Collect Process metrics (FIX: Check if processCollector is nil)
 	if sc.enabledMetrics["processes"] {
-		processActivity, err := sc.processCollector.GetProcessActivity()
-		if err != nil {
-			collectErrors = append(collectErrors, fmt.Errorf("failed to collect process metrics: %w", err))
-			// Set default values
+		if sc.processCollector != nil {
+			processActivity, err := sc.processCollector.GetProcessActivity()
+			if err != nil {
+				collectErrors = append(collectErrors, fmt.Errorf("failed to collect process metrics: %w", err))
+				// Set default values
+				metrics.Processes = models.ProcessActivity{
+					TotalProcesses:   100,
+					RunningProcesses: 80,
+					StoppedProcesses: 5,
+					ZombieProcesses:  0,
+					TopProcesses:     []models.ProcessInfo{},
+				}
+			} else if processActivity != nil {
+				metrics.Processes = *processActivity
+			}
+		} else {
+			// Set default values if collector is nil
 			metrics.Processes = models.ProcessActivity{
 				TotalProcesses:   100,
 				RunningProcesses: 80,
@@ -288,8 +359,6 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 				ZombieProcesses:  0,
 				TopProcesses:     []models.ProcessInfo{},
 			}
-		} else {
-			metrics.Processes = *processActivity
 		}
 	}
 
@@ -419,9 +488,19 @@ func (sc *SystemCollector) GetMetricsSnapshot() (*models.MetricsSnapshot, error)
 		return nil, fmt.Errorf("failed to get system metrics: %w", err)
 	}
 
+	// FIX: Check if systemMetrics is nil
+	if systemMetrics == nil {
+		return nil, fmt.Errorf("system metrics returned nil")
+	}
+
 	systemInfo, err := sc.GetSystemInfo()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get system info: %w", err)
+	}
+
+	// FIX: Check if systemInfo is nil
+	if systemInfo == nil {
+		return nil, fmt.Errorf("system info returned nil")
 	}
 
 	topProcesses, err := sc.GetTopProcesses(10, "cpu")
@@ -452,7 +531,7 @@ func (sc *SystemCollector) StartCollection(ctx context.Context, interval time.Du
 		defer ticker.Stop()
 
 		// Send initial metrics immediately
-		if metrics, err := sc.GetSystemMetrics(); err == nil {
+		if metrics, err := sc.GetSystemMetrics(); err == nil && metrics != nil {
 			select {
 			case ch <- metrics:
 			case <-ctx.Done():
@@ -465,7 +544,7 @@ func (sc *SystemCollector) StartCollection(ctx context.Context, interval time.Du
 			select {
 			case <-ticker.C:
 				metrics, err := sc.GetSystemMetrics()
-				if err != nil {
+				if err != nil || metrics == nil {
 					// Log error but continue collection
 					continue
 				}
@@ -517,6 +596,12 @@ func (sc *SystemCollector) GetTopProcesses(count int, sortBy string) ([]models.P
 			memInfo = &process.MemoryInfoStat{RSS: 0}
 		}
 
+		// FIX: Check if memInfo is nil
+		var memoryBytes uint64 = 0
+		if memInfo != nil {
+			memoryBytes = memInfo.RSS
+		}
+
 		status, err := proc.Status()
 		var statusStr string
 		if err != nil || len(status) == 0 {
@@ -529,7 +614,7 @@ func (sc *SystemCollector) GetTopProcesses(count int, sortBy string) ([]models.P
 			PID:         pid,
 			Name:        name,
 			CPUPercent:  cpuPercent,
-			MemoryBytes: memInfo.RSS,
+			MemoryBytes: memoryBytes,
 			Status:      statusStr,
 		})
 
@@ -574,13 +659,13 @@ func (sc *SystemCollector) sortProcesses(processes []models.ProcessInfo, sortBy 
 	}
 }
 
-// IsHealthy checks if the system is healthy (SPEED CHECKS ADDED)
+// IsHealthy checks if the system is healthy (SPEED CHECKS ADDED) (FIX: Nil checks added)
 func (sc *SystemCollector) IsHealthy() (bool, []string, error) {
 	issues := make([]string, 0) // Initialize empty slice, not nil
 	healthy := true
 
-	// Check memory health
-	if sc.enabledMetrics["memory"] {
+	// Check memory health (FIX: Check if memoryCollector is nil)
+	if sc.enabledMetrics["memory"] && sc.memoryCollector != nil {
 		memHealthy, memMsg, err := sc.memoryCollector.IsMemoryHealthy()
 		if err != nil {
 			return false, []string{"Failed to check memory health"}, err
@@ -591,13 +676,14 @@ func (sc *SystemCollector) IsHealthy() (bool, []string, error) {
 		}
 	}
 
-	// Check disk health
-	if sc.enabledMetrics["disk"] {
+	// Check disk health (FIX: Check if diskCollector is nil)
+	if sc.enabledMetrics["disk"] && sc.diskCollector != nil {
 		diskHealth, err := sc.diskCollector.GetDiskHealth()
 		if err != nil {
 			return false, []string{"Failed to check disk health"}, err
 		}
-		if diskHealth.OverallHealth != "healthy" {
+		// FIX: Check if diskHealth is nil
+		if diskHealth != nil && diskHealth.OverallHealth != "healthy" {
 			healthy = false
 			issues = append(issues, diskHealth.Critical...)
 			issues = append(issues, diskHealth.Warnings...)
@@ -607,7 +693,8 @@ func (sc *SystemCollector) IsHealthy() (bool, []string, error) {
 	// Check if CPU usage is extremely high
 	if sc.enabledMetrics["cpu"] {
 		metrics, err := sc.GetSystemMetrics()
-		if err == nil {
+		// FIX: Check if metrics is nil
+		if err == nil && metrics != nil {
 			if metrics.CPU.Usage > 95 {
 				healthy = false
 				issues = append(issues, fmt.Sprintf("CPU: Usage above 95%% (%.1f%%)", metrics.CPU.Usage))
@@ -664,12 +751,16 @@ func (sc *SystemCollector) SetEnabledMetrics(metrics map[string]bool) {
 	}
 }
 
-// Reset resets the collector state (SPEED TRACKING RESET ADDED)
+// Reset resets the collector state (SPEED TRACKING RESET ADDED) (FIX: Check collectors)
 func (sc *SystemCollector) Reset() {
 	sc.mutex.Lock()
 	defer sc.mutex.Unlock()
 
-	sc.cpuCollector.Reset()
+	// FIX: Check if cpuCollector is nil before calling Reset
+	if sc.cpuCollector != nil {
+		sc.cpuCollector.Reset()
+	}
+
 	sc.collectionCount = 0
 	sc.errors = make([]error, 0)
 	sc.lastCollection = time.Now()

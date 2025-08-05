@@ -34,6 +34,20 @@ type CollectorService struct {
 
 // NewCollectorService creates a new collector service
 func NewCollectorService(cfg *config.Config, metricsRepo repository.MetricsRepository) *CollectorService {
+	// FIX: Check if cfg is nil
+	if cfg == nil {
+		cfg = &config.Config{
+			Metrics: config.MetricsConfig{
+				CollectionInterval: 30 * time.Second,
+				EnableCPU:          true,
+				EnableMemory:       true,
+				EnableDisk:         true,
+				EnableNetwork:      true,
+				EnableProcesses:    true,
+			},
+		}
+	}
+
 	// Create collector configuration
 	collectorConfig := &collector.CollectorConfig{
 		CollectInterval: cfg.Metrics.CollectionInterval,
@@ -69,10 +83,20 @@ func (cs *CollectorService) Start(ctx context.Context) error {
 		return fmt.Errorf("collector service is already running")
 	}
 
+	// FIX: Check if config is nil
+	if cs.config == nil {
+		return fmt.Errorf("collector service configuration is nil")
+	}
+
 	log.Printf("🚀 Starting collector service with %v interval", cs.config.Metrics.CollectionInterval)
 
 	// Create context for this service
 	cs.ctx, cs.cancel = context.WithCancel(ctx)
+
+	// FIX: Check if systemCollector is nil
+	if cs.systemCollector == nil {
+		return fmt.Errorf("system collector is not initialized")
+	}
 
 	// Start metrics collection from system collector
 	cs.metricsChan = cs.systemCollector.StartCollection(cs.ctx, cs.config.Metrics.CollectionInterval)
@@ -132,6 +156,12 @@ func (cs *CollectorService) processMetrics() {
 				return
 			}
 
+			// FIX: Additional nil check for metrics
+			if metrics == nil {
+				log.Printf("❌ Received nil metrics, skipping")
+				continue
+			}
+
 			if err := cs.storeMetrics(metrics); err != nil {
 				log.Printf("❌ Error storing metrics: %v", err)
 			} else {
@@ -161,8 +191,18 @@ func (cs *CollectorService) storeMetrics(systemMetrics *models.SystemMetrics) er
 		return fmt.Errorf("received nil system metrics")
 	}
 
+	// FIX: Check if metricsRepo is nil
+	if cs.metricsRepo == nil {
+		return fmt.Errorf("metrics repository is not available")
+	}
+
 	// Convert SystemMetrics to database Metric model
 	dbMetric := models.ConvertSystemMetricsToDBMetric(systemMetrics)
+
+	// FIX: Check if conversion returned nil
+	if dbMetric == nil {
+		return fmt.Errorf("failed to convert system metrics to database model")
+	}
 
 	// Store in database
 	if err := cs.metricsRepo.Create(dbMetric); err != nil {
@@ -177,6 +217,12 @@ func (cs *CollectorService) startCleanupRoutine() {
 	// Run cleanup every 24 hours
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
+
+	// FIX: Check if config is nil
+	if cs.config == nil {
+		log.Println("❌ Config is nil, cannot start cleanup routine")
+		return
+	}
 
 	log.Printf("🧹 Starting cleanup routine: will delete metrics older than %d days", cs.config.Metrics.RetentionDays)
 
@@ -196,6 +242,16 @@ func (cs *CollectorService) startCleanupRoutine() {
 
 // cleanupOldMetrics removes metrics older than the retention period
 func (cs *CollectorService) cleanupOldMetrics() error {
+	// FIX: Check if config is nil
+	if cs.config == nil {
+		return fmt.Errorf("configuration is not available")
+	}
+
+	// FIX: Check if metricsRepo is nil
+	if cs.metricsRepo == nil {
+		return fmt.Errorf("metrics repository is not available")
+	}
+
 	cutoffTime := time.Now().AddDate(0, 0, -cs.config.Metrics.RetentionDays)
 
 	deletedCount, err := cs.metricsRepo.DeleteOldRecords(cutoffTime)

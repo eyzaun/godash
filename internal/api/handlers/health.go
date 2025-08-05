@@ -181,8 +181,13 @@ func (h *HealthHandler) PrometheusMetrics(c *gin.Context) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	// Get total metrics count
-	totalMetrics, _ := h.metricsRepo.GetTotalCount()
+	// Get total metrics count (FIX: Check if metricsRepo is nil)
+	var totalMetrics int64 = 0
+	if h.metricsRepo != nil {
+		if count, err := h.metricsRepo.GetTotalCount(); err == nil {
+			totalMetrics = count
+		}
+	}
 
 	// Build Prometheus metrics
 	metrics := fmt.Sprintf(`# HELP godash_info Application information
@@ -235,6 +240,16 @@ godash_metrics_total %d
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/admin/database/stats [get]
 func (h *HealthHandler) DatabaseStats(c *gin.Context) {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Metrics repository not available",
+			Message: "Metrics repository is not initialized",
+		})
+		return
+	}
+
 	// Get basic metrics count
 	totalCount, err := h.metricsRepo.GetTotalCount()
 	if err != nil {
@@ -276,6 +291,14 @@ func (h *HealthHandler) DatabaseStats(c *gin.Context) {
 // Helper methods for health checks
 
 func (h *HealthHandler) checkDatabase() HealthCheck {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		return HealthCheck{
+			Status: "unhealthy",
+			Error:  "Metrics repository is not initialized",
+		}
+	}
+
 	// Try to get total count as a simple database connectivity test
 	count, err := h.metricsRepo.GetTotalCount()
 	if err != nil {
@@ -299,7 +322,10 @@ func (h *HealthHandler) checkMemory() HealthCheck {
 	runtime.ReadMemStats(&m)
 
 	// Check if memory usage is concerning (more than 80% of allocated)
-	usagePercent := float64(m.Alloc) / float64(m.Sys) * 100
+	var usagePercent float64 = 0
+	if m.Sys > 0 {
+		usagePercent = float64(m.Alloc) / float64(m.Sys) * 100
+	}
 
 	status := "healthy"
 	message := "Memory usage is normal"
@@ -343,6 +369,14 @@ func (h *HealthHandler) checkGoroutines() HealthCheck {
 }
 
 func (h *HealthHandler) checkMetricsCollection() HealthCheck {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		return HealthCheck{
+			Status: "unhealthy",
+			Error:  "Metrics repository is not initialized",
+		}
+	}
+
 	// Check if we have recent metrics (within last 5 minutes)
 	since := time.Now().Add(-5 * time.Minute)
 	recentCount, err := h.metricsRepo.GetCountByDateRange(since, time.Now())
@@ -372,6 +406,11 @@ func (h *HealthHandler) checkMetricsCollection() HealthCheck {
 }
 
 func (h *HealthHandler) canWriteToDatabase() bool {
+	// FIX: Check if metricsRepo is nil
+	if h.metricsRepo == nil {
+		return false
+	}
+
 	// Try to get the total count - if this works, we can read
 	_, err := h.metricsRepo.GetTotalCount()
 	return err == nil
