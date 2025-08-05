@@ -3,14 +3,6 @@ run:
   timeout: 5m
   tests: true
 
-issues:
-  exclude-dirs:
-    - vendor
-    - node_modules
-  exclude-files:
-    - ".*\\.pb\\.go$"
-    - ".*\\.gen\\.go$"
-
 # Enable specific linters
 linters:
   enable:
@@ -55,11 +47,17 @@ linters-settings:
       - experimental
     disabled-checks:
       - wrapperFunc
-      - dupImport # https://github.com/go-critic/go-critic/issues/845
+      - dupImport
 
 # Issues configuration
 issues:
   exclude-use-default: false
+  exclude-dirs:
+    - vendor
+    - node_modules
+  exclude-files:
+    - ".*\\.pb\\.go$"
+    - ".*\\.gen\\.go$"
   exclude-rules:
     # Disable linters that are annoying in tests.
     - path: "_test\\.go"
@@ -68,7 +66,6 @@ issues:
         - errcheck
         - dupl
         - gosec
-        - scopelint
 
   # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
   max-issues-per-linter: 0
