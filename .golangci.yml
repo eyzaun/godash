@@ -6,7 +6,7 @@ run:
 # Output configuration
 output:
   formats:
-    - format: github-actions
+    - format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
 
