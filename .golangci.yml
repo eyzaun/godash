@@ -20,8 +20,10 @@ linters:
     - dogsled
     - nakedret
     - prealloc
-    - exportloopref
+    - copyloopvar  # Replaced exportloopref
     - gocritic
+  disable:
+    - exportloopref  # Deprecated since Go 1.22
 
 # Configure linters
 linters-settings:
@@ -79,7 +81,11 @@ issues:
 
 # Output configuration options
 output:
-  format: colored-line-number
+  formats:
+    - format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
+
+# Issues configuration
+issues:
   uniq-by-line: true
