@@ -220,7 +220,7 @@ func createSampleMetric() *models.Metric {
 func TestGetCurrentMetrics_Success(t *testing.T) {
 	t.Skip("Temporarily skipping due to interface refactoring")
 
-	router, mockRepo, mockCollector := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter() // mockCollector not used in this test
 
 	expectedMetric := createSampleMetric()
 	mockRepo.On("GetLatest").Return(expectedMetric, nil)
@@ -241,7 +241,7 @@ func TestGetCurrentMetrics_Success(t *testing.T) {
 }
 
 func TestGetCurrentMetrics_NotFound(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter()
 
 	mockRepo.On("GetLatest").Return((*models.Metric)(nil), fmt.Errorf("no metrics found"))
 
@@ -261,7 +261,7 @@ func TestGetCurrentMetrics_NotFound(t *testing.T) {
 }
 
 func TestGetCurrentMetricsByHostname_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter()
 
 	hostname := "test-host"
 	expectedMetric := createSampleMetric()
@@ -282,7 +282,7 @@ func TestGetCurrentMetricsByHostname_Success(t *testing.T) {
 }
 
 func TestGetCurrentMetricsByHostname_NotFound(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter()
 
 	hostname := "nonexistent-host"
 	mockRepo.On("GetLatestByHostname", hostname).Return((*models.Metric)(nil), fmt.Errorf("no metrics found for hostname %s", hostname))
@@ -302,7 +302,7 @@ func TestGetCurrentMetricsByHostname_NotFound(t *testing.T) {
 }
 
 func TestGetMetricsHistory_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter()
 
 	expectedMetrics := []*models.Metric{createSampleMetric()}
 	mockRepo.On("GetHistory", mock.AnythingOfType("time.Time"), mock.AnythingOfType("time.Time"), 50, 0).Return(expectedMetrics, nil)
@@ -324,7 +324,7 @@ func TestGetMetricsHistory_Success(t *testing.T) {
 }
 
 func TestGetMetricsHistory_WithTimeRange(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter()
 
 	expectedMetrics := []*models.Metric{createSampleMetric()}
 	mockRepo.On("GetHistory", mock.AnythingOfType("time.Time"), mock.AnythingOfType("time.Time"), 50, 0).Return(expectedMetrics, nil)
@@ -343,7 +343,7 @@ func TestGetMetricsHistory_WithTimeRange(t *testing.T) {
 }
 
 func TestGetMetricsHistory_InvalidTimeFormat(t *testing.T) {
-	router, _ := setupTestRouter()
+	router, _, _ := setupTestRouter()
 
 	req, _ := http.NewRequest("GET", "/api/v1/metrics/history?from=invalid-time", nil)
 	w := httptest.NewRecorder()
@@ -359,7 +359,7 @@ func TestGetMetricsHistory_InvalidTimeFormat(t *testing.T) {
 }
 
 func TestGetAverageMetrics_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter()
 
 	expectedAverage := &models.AverageMetrics{
 		Duration:       time.Hour,
@@ -386,7 +386,7 @@ func TestGetAverageMetrics_Success(t *testing.T) {
 }
 
 func TestGetAverageMetrics_InvalidDuration(t *testing.T) {
-	router, _ := setupTestRouter()
+	router, _, _ := setupTestRouter()
 
 	req, _ := http.NewRequest("GET", "/api/v1/metrics/average?duration=invalid", nil)
 	w := httptest.NewRecorder()
@@ -402,7 +402,7 @@ func TestGetAverageMetrics_InvalidDuration(t *testing.T) {
 }
 
 func TestGetTopHostsByUsage_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter()
 
 	expectedHosts := []*models.HostUsage{
 		{
@@ -431,7 +431,7 @@ func TestGetTopHostsByUsage_Success(t *testing.T) {
 }
 
 func TestGetTopHostsByUsage_InvalidType(t *testing.T) {
-	router, _ := setupTestRouter()
+	router, _, _ := setupTestRouter()
 
 	req, _ := http.NewRequest("GET", "/api/v1/metrics/top/invalid", nil)
 	w := httptest.NewRecorder()
@@ -447,7 +447,7 @@ func TestGetTopHostsByUsage_InvalidType(t *testing.T) {
 }
 
 func TestCreateMetric_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter()
 
 	metric := createSampleMetric()
 	mockRepo.On("Create", mock.AnythingOfType("*models.Metric")).Return(nil)
@@ -470,7 +470,7 @@ func TestCreateMetric_Success(t *testing.T) {
 }
 
 func TestCreateMetric_InvalidJSON(t *testing.T) {
-	router, _ := setupTestRouter()
+	router, _, _ := setupTestRouter()
 
 	req, _ := http.NewRequest("POST", "/api/v1/metrics", bytes.NewBufferString("invalid json"))
 	req.Header.Set("Content-Type", "application/json")
@@ -487,7 +487,7 @@ func TestCreateMetric_InvalidJSON(t *testing.T) {
 }
 
 func TestGetSystemStatus_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter()
 
 	expectedStatus := []*models.SystemStatus{
 		{
@@ -517,7 +517,7 @@ func TestGetSystemStatus_Success(t *testing.T) {
 }
 
 func TestGetStats_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter()
 
 	mockRepo.On("GetTotalCount").Return(int64(1000), nil)
 
@@ -536,7 +536,7 @@ func TestGetStats_Success(t *testing.T) {
 }
 
 func TestCleanupOldMetrics_Success(t *testing.T) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter()
 
 	mockRepo.On("DeleteOldRecords", mock.AnythingOfType("time.Time")).Return(int64(50), nil)
 
@@ -555,7 +555,7 @@ func TestCleanupOldMetrics_Success(t *testing.T) {
 }
 
 func TestCleanupOldMetrics_InvalidDays(t *testing.T) {
-	router, _ := setupTestRouter()
+	router, _, _ := setupTestRouter()
 
 	req, _ := http.NewRequest("DELETE", "/api/v1/admin/metrics/cleanup?days=0", nil)
 	w := httptest.NewRecorder()
@@ -573,7 +573,7 @@ func TestCleanupOldMetrics_InvalidDays(t *testing.T) {
 // Benchmark tests
 
 func BenchmarkGetCurrentMetrics(b *testing.B) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter()
 
 	expectedMetric := createSampleMetric()
 	mockRepo.On("GetLatest").Return(expectedMetric, nil)
@@ -588,7 +588,7 @@ func BenchmarkGetCurrentMetrics(b *testing.B) {
 }
 
 func BenchmarkCreateMetric(b *testing.B) {
-	router, mockRepo := setupTestRouter()
+	router, mockRepo, _ := setupTestRouter()
 
 	metric := createSampleMetric()
 	mockRepo.On("Create", mock.AnythingOfType("*models.Metric")).Return(nil)
