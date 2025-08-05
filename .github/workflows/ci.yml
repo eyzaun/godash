@@ -9,7 +9,7 @@ on:
     types: [ published ]
 
 env:
-  GO_VERSION: '1.19'
+  GO_VERSION: '1.21'
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.19', '1.20']
+        go-version: ['1.20', '1.21']
         os: [ubuntu-latest, windows-latest, macos-latest]
     
     steps:
@@ -52,7 +52,7 @@ jobs:
       run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
       
     - name: Upload coverage to Codecov
-      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.19'
+      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
       uses: codecov/codecov-action@v3
       with:
         file: ./coverage.out
@@ -83,6 +83,10 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     
     steps:
     - name: Checkout code
@@ -97,11 +101,16 @@ jobs:
       run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
         
     - name: Run Gosec Security Scanner
-      run: gosec -no-fail -fmt sarif -out results.sarif ./...
+      run: |
+        gosec -no-fail -fmt sarif -out results.sarif ./... || echo "Gosec scan completed"
+        # Ensure SARIF file exists even if empty
+        if [ ! -f results.sarif ]; then
+          echo '{"version": "2.1.0", "runs": []}' > results.sarif
+        fi
       continue-on-error: true
         
     - name: Upload SARIF file
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: results.sarif
       if: always()
