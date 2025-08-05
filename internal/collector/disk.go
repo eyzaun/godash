@@ -226,7 +226,7 @@ func (d *DiskCollector) GetDiskHealth() (*DiskHealthInfo, error) {
 	}
 
 	health := &DiskHealthInfo{
-		OverallHealth: utils.HealthStatusHealthy,
+		OverallHealth: utils.StatusHealthy,
 		Warnings:      []string{},
 		Critical:      []string{},
 	}
@@ -234,11 +234,11 @@ func (d *DiskCollector) GetDiskHealth() (*DiskHealthInfo, error) {
 	// Check overall disk usage
 	if metrics.Percent > 95 {
 		health.Critical = append(health.Critical, "Overall disk usage above 95%")
-		health.OverallHealth = utils.HealthStatusCritical
+		health.OverallHealth = utils.StatusCritical
 	} else if metrics.Percent > 85 {
 		health.Warnings = append(health.Warnings, "Overall disk usage above 85%")
-		if health.OverallHealth == utils.HealthStatusHealthy {
-			health.OverallHealth = utils.HealthStatusWarning
+		if health.OverallHealth == utils.StatusHealthy {
+			health.OverallHealth = utils.StatusWarning
 		}
 	}
 
@@ -248,13 +248,13 @@ func (d *DiskCollector) GetDiskHealth() (*DiskHealthInfo, error) {
 			health.Critical = append(health.Critical,
 				fmt.Sprintf("Partition %s usage above 95%% (%.1f%%)",
 					partition.Mountpoint, partition.Percent))
-			health.OverallHealth = utils.HealthStatusCritical
+			health.OverallHealth = utils.StatusCritical
 		} else if partition.Percent > 85 {
 			health.Warnings = append(health.Warnings,
 				fmt.Sprintf("Partition %s usage above 85%% (%.1f%%)",
 					partition.Mountpoint, partition.Percent))
-			if health.OverallHealth == utils.HealthStatusHealthy {
-				health.OverallHealth = utils.HealthStatusWarning
+			if health.OverallHealth == utils.StatusHealthy {
+				health.OverallHealth = utils.StatusWarning
 			}
 		}
 
@@ -263,8 +263,8 @@ func (d *DiskCollector) GetDiskHealth() (*DiskHealthInfo, error) {
 			health.Warnings = append(health.Warnings,
 				fmt.Sprintf("Partition %s has less than 1GB free space",
 					partition.Mountpoint))
-			if health.OverallHealth == utils.HealthStatusHealthy {
-				health.OverallHealth = utils.HealthStatusWarning
+			if health.OverallHealth == utils.StatusHealthy {
+				health.OverallHealth = utils.StatusWarning
 			}
 		}
 	}

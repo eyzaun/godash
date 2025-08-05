@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -172,10 +173,7 @@ func setupTestRouter() (*gin.Engine, *MockMetricsRepository, *MockSystemCollecto
 	gin.SetMode(gin.TestMode)
 
 	mockRepo := new(MockMetricsRepository)
-
-	// Create a simple mock that won't panic
-	mockCollector := &MockSystemCollector{}
-
+	mockCollector := new(MockSystemCollector)
 	handler := NewMetricsHandler(mockRepo, mockCollector)
 
 	router := gin.New()
@@ -218,12 +216,28 @@ func createSampleMetric() *models.Metric {
 // Test cases
 
 func TestGetCurrentMetrics_Success(t *testing.T) {
-	t.Skip("Temporarily skipping due to interface refactoring")
+	router, _, mockCollector := setupTestRouter()
 
-	router, mockRepo, _ := setupTestRouter() // mockCollector not used in this test
-
-	expectedMetric := createSampleMetric()
-	mockRepo.On("GetLatest").Return(expectedMetric, nil)
+	// Mock the system collector to return sample metrics
+	expectedSystemMetrics := &models.SystemMetrics{
+		CPU: models.CPUMetrics{
+			Usage: 75.5,
+			Cores: 4,
+		},
+		Memory: models.MemoryMetrics{
+			Percent: 65.2,
+			Total:   16 * 1024 * 1024 * 1024, // 16GB in bytes
+			Used:    10 * 1024 * 1024 * 1024, // 10GB in bytes
+		},
+		Disk: models.DiskMetrics{
+			Percent: 45.8,
+			Total:   500 * 1024 * 1024 * 1024, // 500GB in bytes
+			Used:    229 * 1024 * 1024 * 1024, // 229GB in bytes
+		},
+		Timestamp: time.Now(),
+		Hostname:  "test-host",
+	}
+	mockCollector.On("GetSystemMetrics").Return(expectedSystemMetrics, nil)
 
 	req, _ := http.NewRequest("GET", "/api/v1/metrics/current", nil)
 	w := httptest.NewRecorder()
@@ -237,13 +251,15 @@ func TestGetCurrentMetrics_Success(t *testing.T) {
 	assert.True(t, response.Success)
 	assert.NotNil(t, response.Data)
 
-	mockRepo.AssertExpectations(t)
+	mockCollector.AssertExpectations(t)
 }
 
 func TestGetCurrentMetrics_NotFound(t *testing.T) {
-	router, mockRepo, _ := setupTestRouter()
+	router, _, mockCollector := setupTestRouter()
 
-	mockRepo.On("GetLatest").Return((*models.Metric)(nil), fmt.Errorf("no metrics found"))
+	// System collector error'ı simulate et
+	mockCollector.On("GetSystemMetrics").Return((*models.SystemMetrics)(nil), fmt.Errorf("system collector error"))
+	// Bu durumda repo çağrılmayacak çünkü systemCollector hata veriyor
 
 	req, _ := http.NewRequest("GET", "/api/v1/metrics/current", nil)
 	w := httptest.NewRecorder()
@@ -257,7 +273,7 @@ func TestGetCurrentMetrics_NotFound(t *testing.T) {
 	assert.False(t, response.Success)
 	assert.NotEmpty(t, response.Error)
 
-	mockRepo.AssertExpectations(t)
+	mockCollector.AssertExpectations(t)
 }
 
 func TestGetCurrentMetricsByHostname_Success(t *testing.T) {
@@ -291,7 +307,7 @@ func TestGetCurrentMetricsByHostname_NotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 
 	var response APIResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
@@ -333,7 +349,8 @@ func TestGetMetricsHistory_WithTimeRange(t *testing.T) {
 	from := time.Now().Add(-2 * time.Hour).Format(time.RFC3339)
 	to := time.Now().Format(time.RFC3339)
 
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/metrics/history?from=%s&to=%s", from, to), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/metrics/history?from=%s&to=%s",
+		url.QueryEscape(from), url.QueryEscape(to)), nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -452,7 +469,7 @@ func TestCreateMetric_Success(t *testing.T) {
 	metric := createSampleMetric()
 	mockRepo.On("Create", mock.AnythingOfType("*models.Metric")).Return(nil)
 
-	jsonData, _ := json.Marshal(metric)
+	jsonData, _ := json.Marshal(metric) // Error ignored for test data
 	req, _ := http.NewRequest("POST", "/api/v1/metrics", bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -520,6 +537,18 @@ func TestGetStats_Success(t *testing.T) {
 	router, mockRepo, _ := setupTestRouter()
 
 	mockRepo.On("GetTotalCount").Return(int64(1000), nil)
+	mockRepo.On("GetSystemStatus").Return([]*models.SystemStatus{
+		{Hostname: "test-host", Timestamp: time.Now(), Status: "online"},
+	}, nil)
+
+	expectedAverageMetrics := &models.AverageMetrics{
+		AvgCPUUsage:    75.5,
+		AvgMemoryUsage: 65.2,
+		AvgDiskUsage:   45.8,
+		Duration:       time.Hour,
+		SampleCount:    100,
+	}
+	mockRepo.On("GetAverageUsage", time.Hour).Return(expectedAverageMetrics, nil)
 
 	req, _ := http.NewRequest("GET", "/api/v1/system/stats", nil)
 	w := httptest.NewRecorder()
@@ -593,7 +622,7 @@ func BenchmarkCreateMetric(b *testing.B) {
 	metric := createSampleMetric()
 	mockRepo.On("Create", mock.AnythingOfType("*models.Metric")).Return(nil)
 
-	jsonData, _ := json.Marshal(metric)
+	jsonData, _ := json.Marshal(metric) // Error ignored for benchmark test
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

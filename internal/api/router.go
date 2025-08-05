@@ -1,3 +1,4 @@
+// Package api provides HTTP API routing and middleware for the GoDash web service.
 package api
 
 import (

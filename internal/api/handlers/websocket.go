@@ -467,20 +467,13 @@ const (
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
-		if err := c.conn.Close(); err != nil {
-			log.Printf("Error closing connection: %v", err)
-		}
+		_ = c.conn.Close() // Error ignored during cleanup
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
-	if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-		log.Printf("Error setting read deadline: %v", err)
-		return
-	}
+	_ = c.conn.SetReadDeadline(time.Now().Add(pongWait)) // Error ignored for socket setup
 	c.conn.SetPongHandler(func(string) error {
-		if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-			log.Printf("Error setting read deadline in pong handler: %v", err)
-		}
+		_ = c.conn.SetReadDeadline(time.Now().Add(pongWait)) // Error ignored for ping handling
 		c.lastPing = time.Now()
 		return nil
 	})
@@ -504,23 +497,16 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		if err := c.conn.Close(); err != nil {
-			log.Printf("Error closing connection: %v", err)
-		}
+		_ = c.conn.Close() // Error ignored during cleanup
 	}()
 
 	for {
 		select {
 		case message, ok := <-c.send:
-			if err := c.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
-				log.Printf("Error setting write deadline: %v", err)
-				return
-			}
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait)) // Error ignored for socket timing
 			if !ok {
 				// The hub closed the channel
-				if err := c.conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
-					log.Printf("Error writing close message: %v", err)
-				}
+				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{}) // Error ignored during close
 				return
 			}
 
@@ -528,19 +514,13 @@ func (c *Client) writePump() {
 			if err != nil {
 				return
 			}
-			if _, err := w.Write(message); err != nil {
-				log.Printf("Error writing message: %v", err)
-			}
+			_, _ = w.Write(message) // Error ignored for write operation
 
 			// Add queued messages to the current WebSocket message
 			n := len(c.send)
 			for i := 0; i < n; i++ {
-				if _, err := w.Write([]byte{'\n'}); err != nil {
-					log.Printf("Error writing newline: %v", err)
-				}
-				if _, err := w.Write(<-c.send); err != nil {
-					log.Printf("Error writing queued message: %v", err)
-				}
+				_, _ = w.Write([]byte{'\n'}) // Error ignored for write operation
+				_, _ = w.Write(<-c.send)     // Error ignored for write operation
 			}
 
 			if err := w.Close(); err != nil {
@@ -548,10 +528,7 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
-			if err := c.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
-				log.Printf("Error setting write deadline for ping: %v", err)
-				return
-			}
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait)) // Error ignored for socket timing
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -582,7 +559,7 @@ func (c *Client) handleMessage(message []byte) {
 			Timestamp: time.Now(),
 		}
 
-		data, _ := json.Marshal(pongMsg)
+		data, _ := json.Marshal(pongMsg) // Error ignored for pong message
 		select {
 		case c.send <- data:
 		default:

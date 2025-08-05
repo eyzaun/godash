@@ -250,8 +250,8 @@ func (h *MetricsHandler) GetMetricsHistory(c *gin.Context) {
 	}
 
 	// Parse pagination parameters
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50")) // Error ignored, using default on failure
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))    // Error ignored, using default on failure
 
 	if limit <= 0 || limit > 1000 {
 		limit = 50
@@ -447,8 +447,8 @@ func (h *MetricsHandler) GetMetricsHistoryByHostname(c *gin.Context) {
 		to = time.Now()
 	}
 
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50")) // Error ignored, using default on failure
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))    // Error ignored, using default on failure
 
 	if limit <= 0 || limit > 1000 {
 		limit = 50
@@ -641,7 +641,7 @@ func (h *MetricsHandler) GetMetricsSummary(c *gin.Context) {
 // @Router /api/v1/metrics/trends/{hostname} [get]
 func (h *MetricsHandler) GetUsageTrends(c *gin.Context) {
 	hostname := c.Param("hostname")
-	hours, _ := strconv.Atoi(c.DefaultQuery("hours", "24"))
+	hours, _ := strconv.Atoi(c.DefaultQuery("hours", "24")) // Error ignored, using default on failure
 
 	if hours <= 0 || hours > 168 { // Max 1 week
 		hours = 24
@@ -677,7 +677,7 @@ func (h *MetricsHandler) GetUsageTrends(c *gin.Context) {
 // @Router /api/v1/metrics/top/{type} [get]
 func (h *MetricsHandler) GetTopHostsByUsage(c *gin.Context) {
 	metricType := c.Param("type")
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10")) // Error ignored, using default on failure
 
 	if limit <= 0 || limit > 100 {
 		limit = 10
@@ -840,18 +840,18 @@ func (h *MetricsHandler) GetStats(c *gin.Context) {
 
 	// Get average metrics for last hour - DÜZELTİLMİŞ VERSİYON
 	averageMetrics, err := h.metricsRepo.GetAverageUsage(time.Hour)
-	avgCpu := 0.0
+	avgCPU := 0.0
 	avgMemory := 0.0
 
 	if err == nil && averageMetrics != nil && averageMetrics.SampleCount > 0 {
-		avgCpu = averageMetrics.AvgCPUUsage
+		avgCPU = averageMetrics.AvgCPUUsage
 		avgMemory = averageMetrics.AvgMemoryUsage
 	} else {
 		// Fallback: try to get current metrics if no historical data
 		if h.systemCollector != nil {
 			currentMetrics, collectorErr := h.systemCollector.GetSystemMetrics()
 			if collectorErr == nil {
-				avgCpu = currentMetrics.CPU.Usage
+				avgCPU = currentMetrics.CPU.Usage
 				avgMemory = currentMetrics.Memory.Percent
 			}
 		}
@@ -860,7 +860,7 @@ func (h *MetricsHandler) GetStats(c *gin.Context) {
 	stats := map[string]interface{}{
 		"total_metrics":    totalCount,
 		"total_hosts":      totalHosts,
-		"avg_cpu_usage":    avgCpu,
+		"avg_cpu_usage":    avgCPU,
 		"avg_memory_usage": avgMemory,
 		"timestamp":        time.Now(),
 	}
@@ -883,7 +883,7 @@ func (h *MetricsHandler) GetStats(c *gin.Context) {
 // @Failure 500 {object} APIResponse
 // @Router /api/v1/admin/metrics/cleanup [delete]
 func (h *MetricsHandler) CleanupOldMetrics(c *gin.Context) {
-	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "30")) // Error ignored, using default on failure
 
 	if days <= 0 {
 		c.JSON(http.StatusBadRequest, APIResponse{

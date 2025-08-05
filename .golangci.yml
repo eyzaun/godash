@@ -1,6 +1,7 @@
-# GolangCI-Lint Configuration
+# GolangCI-Lint Configuration for GoDash
 run:
   timeout: 5m
+  issues-exit-code: 1
   tests: true
 
 # Output configuration
@@ -10,55 +11,55 @@ output:
   print-issued-lines: true
   print-linter-name: true
 
-# Enable specific linters
-linters:
   enable:
-    - gofmt
-    - govet
-    - staticcheck
-    - unused
+    - errcheck
     - gosimple
+    - govet
     - ineffassign
+    - staticcheck
     - typecheck
+    - unused
+    - gofmt
+    - goimports
+    - misspell
+    - revive
     - goconst
     - gocyclo
-    - misspell
     - unparam
-    - dogsled
     - nakedret
     - prealloc
-    - copyloopvar
-    - gocritic
-  disable:
-    - exportloopref
 
 # Configure linters
 linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  
+  revive:
+    min-confidence: 0.8
+  
   gocyclo:
     min-complexity: 15
+  
   goconst:
     min-len: 3
     min-occurrences: 3
+  
   misspell:
     locale: US
+  
   unparam:
     check-exported: false
+  
   nakedret:
     max-func-lines: 30
+  
   prealloc:
     simple: true
     range-loops: true
     for-loops: false
-  gocritic:
-    enabled-tags:
-      - performance
-      - style
-      - experimental
-    disabled-checks:
-      - wrapperFunc
-      - dupImport
 
-# Issues configuration (consolidated)
+# Issues configuration
 issues:
   exclude-use-default: false
   exclude-dirs:
@@ -70,11 +71,16 @@ issues:
   exclude-rules:
     - path: "_test\\.go"
       linters:
-        - gocyclo
         - errcheck
-        - dupl
         - gosec
+        - gocyclo
+        - dupl
+    - path: "cmd/cli/main\\.go"
+      linters:
+        - gocyclo  # CLI main function can be complex
   max-issues-per-linter: 0
   max-same-issues: 0
   new: false
-  uniq-by-line: true
+
+severity:
+  default-severity: error

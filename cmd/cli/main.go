@@ -1,3 +1,4 @@
+// Package cli provides command-line interface functionality for the GoDash application.
 package cli
 
 import (
@@ -16,8 +17,8 @@ import (
 	"github.com/fatih/color"
 )
 
-// CLIConfig holds CLI configuration
-type CLIConfig struct {
+// Config holds CLI configuration
+type Config struct {
 	Interval      time.Duration
 	OutputJSON    bool
 	ShowProcesses bool
@@ -310,9 +311,10 @@ func clearScreen() {
 	fmt.Print("\033[2J\033[H")
 }
 
+// RunCLI starts the command-line interface for system monitoring.
 func RunCLI() {
 	// Parse command line flags
-	var config CLIConfig
+	var config Config
 	flag.DurationVar(&config.Interval, "interval", 5*time.Second, "Update interval")
 	flag.BoolVar(&config.OutputJSON, "json", false, "Output in JSON format")
 	flag.BoolVar(&config.ShowProcesses, "processes", false, "Show top processes")

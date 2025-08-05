@@ -1,3 +1,4 @@
+// Package utils provides utility functions for the GoDash application.
 package utils
 
 import (
@@ -9,12 +10,12 @@ import (
 	"time"
 )
 
-// Health status constants
+// Status constants for system health monitoring
 const (
-	HealthStatusHealthy  = "healthy"
-	HealthStatusWarning  = "warning"
-	HealthStatusCritical = "critical"
-	HealthStatusUnknown  = "unknown"
+	StatusHealthy  = "healthy"
+	StatusWarning  = "warning"
+	StatusCritical = "critical"
+	StatusUnknown  = "unknown"
 )
 
 // FormatBytes converts bytes to human readable format
@@ -314,7 +315,7 @@ func GetMemoryPressureLevel(percent float64) string {
 	case percent < 90:
 		return "high"
 	default:
-		return HealthStatusCritical
+		return StatusCritical
 	}
 }
 
@@ -322,11 +323,11 @@ func GetMemoryPressureLevel(percent float64) string {
 func GetDiskHealthLevel(percent float64) string {
 	switch {
 	case percent < 80:
-		return HealthStatusHealthy
+		return StatusHealthy
 	case percent < 90:
-		return HealthStatusWarning
+		return StatusWarning
 	default:
-		return HealthStatusCritical
+		return StatusCritical
 	}
 }
 
@@ -340,7 +341,7 @@ func GetCPULoadLevel(percent float64) string {
 	case percent < 95:
 		return "high"
 	default:
-		return HealthStatusCritical
+		return StatusCritical
 	}
 }
 

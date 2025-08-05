@@ -1,3 +1,4 @@
+// Package main provides the entry point for the GoDash system monitoring application.
 package main
 
 import (

@@ -1,3 +1,4 @@
+// Package repository provides data access layer interfaces and implementations for metrics storage.
 package repository
 
 import (

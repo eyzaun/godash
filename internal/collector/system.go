@@ -1,3 +1,4 @@
+// Package collector provides system metrics collection functionality for CPU, memory, disk, and process monitoring.
 package collector
 
 import (
@@ -60,8 +61,8 @@ type SystemCollector struct {
 	lastNetworkRecv  uint64
 }
 
-// CollectorConfig holds configuration for the system collector
-type CollectorConfig struct {
+// Config holds configuration for the system collector
+type Config struct {
 	CollectInterval time.Duration `json:"collect_interval"`
 	EnableCPU       bool          `json:"enable_cpu"`
 	EnableMemory    bool          `json:"enable_memory"`
@@ -70,9 +71,9 @@ type CollectorConfig struct {
 	EnableProcesses bool          `json:"enable_processes"`
 }
 
-// DefaultCollectorConfig returns default collector configuration
-func DefaultCollectorConfig() *CollectorConfig {
-	return &CollectorConfig{
+// DefaultConfig returns default collector configuration
+func DefaultConfig() *Config {
+	return &Config{
 		CollectInterval: 30 * time.Second,
 		EnableCPU:       true,
 		EnableMemory:    true,
@@ -83,9 +84,9 @@ func DefaultCollectorConfig() *CollectorConfig {
 }
 
 // NewSystemCollector creates a new system collector (SPEED TRACKING ADDED)
-func NewSystemCollector(config *CollectorConfig) *SystemCollector {
+func NewSystemCollector(config *Config) *SystemCollector {
 	if config == nil {
-		config = DefaultCollectorConfig()
+		config = DefaultConfig()
 	}
 
 	return &SystemCollector{
@@ -118,179 +119,28 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 	var collectErrors []error
 	currentTime := time.Now()
 
-	// Get hostname
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "unknown"
-		collectErrors = append(collectErrors, fmt.Errorf("failed to get hostname: %w", err))
+	if err := sc.collectBasicInfo(&metrics, &collectErrors); err != nil {
+		collectErrors = append(collectErrors, err)
 	}
 
-	// Get uptime
-	uptime, err := host.Uptime()
-	if err != nil {
-		uptime = 0
-		collectErrors = append(collectErrors, fmt.Errorf("failed to get uptime: %w", err))
+	if err := sc.collectCPUMetrics(&metrics, &collectErrors); err != nil {
+		collectErrors = append(collectErrors, err)
 	}
 
-	// Set basic info
-	metrics.Hostname = hostname
-	metrics.Uptime = time.Duration(uptime) * time.Second
-	metrics.Timestamp = currentTime
-
-	// Collect CPU metrics
-	if sc.enabledMetrics["cpu"] {
-		cpuMetrics, err := sc.cpuCollector.GetCPUMetrics()
-		if err != nil {
-			collectErrors = append(collectErrors, fmt.Errorf("failed to collect CPU metrics: %w", err))
-			// Set default values to avoid nil pointer issues
-			metrics.CPU = models.CPUMetrics{
-				Usage:     0,
-				Cores:     1,
-				CoreUsage: []float64{0},
-				LoadAvg:   []float64{0, 0, 0},
-				Frequency: 0,
-			}
-		} else {
-			metrics.CPU = *cpuMetrics
-		}
+	if err := sc.collectMemoryMetrics(&metrics, &collectErrors); err != nil {
+		collectErrors = append(collectErrors, err)
 	}
 
-	// Collect Memory metrics
-	if sc.enabledMetrics["memory"] {
-		memoryMetrics, err := sc.memoryCollector.GetMemoryMetrics()
-		if err != nil {
-			collectErrors = append(collectErrors, fmt.Errorf("failed to collect memory metrics: %w", err))
-			// Set default values
-			metrics.Memory = models.MemoryMetrics{
-				Total:       1024 * 1024 * 1024, // 1GB default
-				Used:        0,
-				Available:   1024 * 1024 * 1024,
-				Free:        1024 * 1024 * 1024,
-				Cached:      0,
-				Buffers:     0,
-				Percent:     0,
-				SwapTotal:   0,
-				SwapUsed:    0,
-				SwapPercent: 0,
-			}
-		} else {
-			metrics.Memory = *memoryMetrics
-		}
+	if err := sc.collectDiskMetrics(&metrics, &collectErrors, currentTime); err != nil {
+		collectErrors = append(collectErrors, err)
 	}
 
-	// Collect Disk metrics (SPEED CALCULATION ADDED)
-	if sc.enabledMetrics["disk"] {
-		diskMetrics, err := sc.diskCollector.GetDiskMetrics()
-		if err != nil {
-			collectErrors = append(collectErrors, fmt.Errorf("failed to collect disk metrics: %w", err))
-			// Set more realistic default values
-			metrics.Disk = models.DiskMetrics{
-				Total:   100 * 1024 * 1024 * 1024, // 100GB default
-				Used:    50 * 1024 * 1024 * 1024,  // 50GB used
-				Free:    50 * 1024 * 1024 * 1024,  // 50GB free
-				Percent: 50.0,                     // 50% used
-				Partitions: []models.PartitionInfo{
-					{
-						Device:     "/dev/sda1",
-						Mountpoint: "/",
-						Fstype:     "ext4",
-						Total:      100 * 1024 * 1024 * 1024,
-						Used:       50 * 1024 * 1024 * 1024,
-						Free:       50 * 1024 * 1024 * 1024,
-						Percent:    50.0,
-					},
-				},
-				IOStats: models.DiskIOStats{
-					ReadBytes:  1024 * 1024, // 1MB
-					WriteBytes: 1024 * 1024, // 1MB
-					ReadOps:    100,
-					WriteOps:   50,
-					ReadTime:   10,
-					WriteTime:  5,
-				},
-				ReadSpeed:  0, // Default to 0
-				WriteSpeed: 0, // Default to 0
-			}
-		} else {
-			metrics.Disk = *diskMetrics
-
-			// NEW: Calculate disk I/O speed
-			timeDiff := currentTime.Sub(sc.lastDiskTime)
-			if sc.lastDiskTime.IsZero() || timeDiff <= 0 {
-				// First measurement or invalid time diff
-				metrics.Disk.ReadSpeed = 0
-				metrics.Disk.WriteSpeed = 0
-			} else {
-				// Calculate speeds using helper method
-				metrics.Disk.CalculateDiskSpeed(sc.lastDiskStats, timeDiff)
-			}
-
-			// Store current stats for next calculation
-			sc.lastDiskStats = metrics.Disk.IOStats
-			sc.lastDiskTime = currentTime
-		}
+	if err := sc.collectNetworkMetrics(&metrics, &collectErrors, currentTime); err != nil {
+		collectErrors = append(collectErrors, err)
 	}
 
-	// Collect Network metrics (SPEED CALCULATION ADDED)
-	if sc.enabledMetrics["network"] {
-		networkMetrics, err := sc.getNetworkMetrics()
-		if err != nil {
-			collectErrors = append(collectErrors, fmt.Errorf("failed to collect network metrics: %w", err))
-			// Set realistic default values
-			metrics.Network = models.NetworkMetrics{
-				Interfaces: []models.NetworkInterface{
-					{
-						Name:        "eth0",
-						BytesSent:   1024 * 1024 * 10, // 10MB sent
-						BytesRecv:   1024 * 1024 * 50, // 50MB received
-						PacketsSent: 1000,
-						PacketsRecv: 5000,
-						Errors:      0,
-						Drops:       0,
-					},
-				},
-				TotalSent:     1024 * 1024 * 10,
-				TotalReceived: 1024 * 1024 * 50,
-				UploadSpeed:   0, // Default to 0
-				DownloadSpeed: 0, // Default to 0
-			}
-		} else {
-			metrics.Network = *networkMetrics
-
-			// NEW: Calculate network speed
-			timeDiff := currentTime.Sub(sc.lastNetworkTime)
-			if sc.lastNetworkTime.IsZero() || timeDiff <= 0 {
-				// First measurement or invalid time diff
-				metrics.Network.UploadSpeed = 0
-				metrics.Network.DownloadSpeed = 0
-			} else {
-				// Calculate speeds using helper method
-				metrics.Network.CalculateNetworkSpeed(sc.lastNetworkSent, sc.lastNetworkRecv, timeDiff)
-			}
-
-			// Store current stats for next calculation
-			sc.lastNetworkSent = metrics.Network.TotalSent
-			sc.lastNetworkRecv = metrics.Network.TotalReceived
-			sc.lastNetworkTime = currentTime
-		}
-	}
-
-	// Collect Process metrics
-	if sc.enabledMetrics["processes"] {
-		processActivity, err := sc.processCollector.GetProcessActivity()
-		if err != nil {
-			collectErrors = append(collectErrors, fmt.Errorf("failed to collect process metrics: %w", err))
-			// Set default values
-			metrics.Processes = models.ProcessActivity{
-				TotalProcesses:   100,
-				RunningProcesses: 80,
-				StoppedProcesses: 5,
-				ZombieProcesses:  0,
-				TopProcesses:     []models.ProcessInfo{},
-			}
-		} else {
-			metrics.Processes = *processActivity
-		}
+	if err := sc.collectProcessMetrics(&metrics, &collectErrors); err != nil {
+		collectErrors = append(collectErrors, err)
 	}
 
 	// Update collection stats
@@ -304,6 +154,214 @@ func (sc *SystemCollector) GetSystemMetrics() (*models.SystemMetrics, error) {
 	}
 
 	return &metrics, nil
+}
+
+// collectBasicInfo collects basic system information
+func (sc *SystemCollector) collectBasicInfo(metrics *models.SystemMetrics, collectErrors *[]error) error {
+	currentTime := time.Now()
+
+	// Get hostname
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "unknown"
+		*collectErrors = append(*collectErrors, fmt.Errorf("failed to get hostname: %w", err))
+	}
+
+	// Get uptime
+	uptime, err := host.Uptime()
+	if err != nil {
+		uptime = 0
+		*collectErrors = append(*collectErrors, fmt.Errorf("failed to get uptime: %w", err))
+	}
+
+	// Set basic info
+	metrics.Hostname = hostname
+	metrics.Uptime = time.Duration(uptime) * time.Second
+	metrics.Timestamp = currentTime
+	return nil
+}
+
+// collectCPUMetrics collects CPU metrics
+func (sc *SystemCollector) collectCPUMetrics(metrics *models.SystemMetrics, collectErrors *[]error) error {
+	if !sc.enabledMetrics["cpu"] {
+		return nil
+	}
+
+	cpuMetrics, err := sc.cpuCollector.GetCPUMetrics()
+	if err != nil {
+		*collectErrors = append(*collectErrors, fmt.Errorf("failed to collect CPU metrics: %w", err))
+		// Set default values to avoid nil pointer issues
+		metrics.CPU = models.CPUMetrics{
+			Usage:     0,
+			Cores:     1,
+			CoreUsage: []float64{0},
+			LoadAvg:   []float64{0, 0, 0},
+			Frequency: 0,
+		}
+		return err
+	}
+	metrics.CPU = *cpuMetrics
+	return nil
+}
+
+// collectMemoryMetrics collects memory metrics
+func (sc *SystemCollector) collectMemoryMetrics(metrics *models.SystemMetrics, collectErrors *[]error) error {
+	if !sc.enabledMetrics["memory"] {
+		return nil
+	}
+
+	memoryMetrics, err := sc.memoryCollector.GetMemoryMetrics()
+	if err != nil {
+		*collectErrors = append(*collectErrors, fmt.Errorf("failed to collect memory metrics: %w", err))
+		// Set default values
+		metrics.Memory = models.MemoryMetrics{
+			Total:       1024 * 1024 * 1024, // 1GB default
+			Used:        0,
+			Available:   1024 * 1024 * 1024,
+			Free:        1024 * 1024 * 1024,
+			Cached:      0,
+			Buffers:     0,
+			Percent:     0,
+			SwapTotal:   0,
+			SwapUsed:    0,
+			SwapPercent: 0,
+		}
+		return err
+	}
+	metrics.Memory = *memoryMetrics
+	return nil
+}
+
+// collectDiskMetrics collects disk metrics with speed calculation
+func (sc *SystemCollector) collectDiskMetrics(metrics *models.SystemMetrics, collectErrors *[]error, currentTime time.Time) error {
+	if !sc.enabledMetrics["disk"] {
+		return nil
+	}
+
+	diskMetrics, err := sc.diskCollector.GetDiskMetrics()
+	if err != nil {
+		*collectErrors = append(*collectErrors, fmt.Errorf("failed to collect disk metrics: %w", err))
+		// Set more realistic default values
+		metrics.Disk = models.DiskMetrics{
+			Total:   100 * 1024 * 1024 * 1024, // 100GB default
+			Used:    50 * 1024 * 1024 * 1024,  // 50GB used
+			Free:    50 * 1024 * 1024 * 1024,  // 50GB free
+			Percent: 50.0,                     // 50% used
+			Partitions: []models.PartitionInfo{
+				{
+					Device:     "/dev/sda1",
+					Mountpoint: "/",
+					Fstype:     "ext4",
+					Total:      100 * 1024 * 1024 * 1024,
+					Used:       50 * 1024 * 1024 * 1024,
+					Free:       50 * 1024 * 1024 * 1024,
+					Percent:    50.0,
+				},
+			},
+			IOStats: models.DiskIOStats{
+				ReadBytes:  1024 * 1024, // 1MB
+				WriteBytes: 1024 * 1024, // 1MB
+				ReadOps:    100,
+				WriteOps:   50,
+				ReadTime:   10,
+				WriteTime:  5,
+			},
+			ReadSpeed:  0, // Default to 0
+			WriteSpeed: 0, // Default to 0
+		}
+		return err
+	}
+
+	metrics.Disk = *diskMetrics
+
+	// Calculate disk I/O speed
+	timeDiff := currentTime.Sub(sc.lastDiskTime)
+	if sc.lastDiskTime.IsZero() || timeDiff <= 0 {
+		// First measurement or invalid time diff
+		metrics.Disk.ReadSpeed = 0
+		metrics.Disk.WriteSpeed = 0
+	} else {
+		// Calculate speeds using helper method
+		metrics.Disk.CalculateDiskSpeed(sc.lastDiskStats, timeDiff)
+	}
+
+	// Store current stats for next calculation
+	sc.lastDiskStats = metrics.Disk.IOStats
+	sc.lastDiskTime = currentTime
+	return nil
+}
+
+// collectNetworkMetrics collects network metrics with speed calculation
+func (sc *SystemCollector) collectNetworkMetrics(metrics *models.SystemMetrics, collectErrors *[]error, currentTime time.Time) error {
+	if !sc.enabledMetrics["network"] {
+		return nil
+	}
+
+	networkMetrics, err := sc.getNetworkMetrics()
+	if err != nil {
+		*collectErrors = append(*collectErrors, fmt.Errorf("failed to collect network metrics: %w", err))
+		// Set realistic default values
+		metrics.Network = models.NetworkMetrics{
+			Interfaces: []models.NetworkInterface{
+				{
+					Name:        "eth0",
+					BytesSent:   1024 * 1024 * 10, // 10MB sent
+					BytesRecv:   1024 * 1024 * 50, // 50MB received
+					PacketsSent: 1000,
+					PacketsRecv: 5000,
+					Errors:      0,
+					Drops:       0,
+				},
+			},
+			TotalSent:     1024 * 1024 * 10,
+			TotalReceived: 1024 * 1024 * 50,
+			UploadSpeed:   0, // Default to 0
+			DownloadSpeed: 0, // Default to 0
+		}
+		return err
+	}
+
+	metrics.Network = *networkMetrics
+
+	// Calculate network speed
+	timeDiff := currentTime.Sub(sc.lastNetworkTime)
+	if sc.lastNetworkTime.IsZero() || timeDiff <= 0 {
+		// First measurement or invalid time diff
+		metrics.Network.UploadSpeed = 0
+		metrics.Network.DownloadSpeed = 0
+	} else {
+		// Calculate speeds using helper method
+		metrics.Network.CalculateNetworkSpeed(sc.lastNetworkSent, sc.lastNetworkRecv, timeDiff)
+	}
+
+	// Store current stats for next calculation
+	sc.lastNetworkSent = metrics.Network.TotalSent
+	sc.lastNetworkRecv = metrics.Network.TotalReceived
+	sc.lastNetworkTime = currentTime
+	return nil
+}
+
+// collectProcessMetrics collects process metrics
+func (sc *SystemCollector) collectProcessMetrics(metrics *models.SystemMetrics, collectErrors *[]error) error {
+	if !sc.enabledMetrics["processes"] {
+		return nil
+	}
+
+	processActivity, err := sc.processCollector.GetProcessActivity()
+	if err != nil {
+		*collectErrors = append(*collectErrors, fmt.Errorf("failed to collect process metrics: %w", err))
+		// Set default values
+		metrics.Processes = models.ProcessActivity{
+			TotalProcesses:   100,
+			RunningProcesses: 80,
+			StoppedProcesses: 5,
+			ZombieProcesses:  0,
+			TopProcesses:     []models.ProcessInfo{},
+		}
+		return err
+	}
+	metrics.Processes = *processActivity
+	return nil
 }
 
 // getNetworkMetrics collects network usage metrics (ENHANCED FOR SPEED TRACKING)

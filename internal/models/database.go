@@ -1,3 +1,4 @@
+// Package models defines data structures and models for the GoDash application.
 package models
 
 import (

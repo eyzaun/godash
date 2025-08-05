@@ -1,3 +1,4 @@
+// Package config provides configuration management for the GoDash application.
 package config
 
 import (
@@ -204,7 +205,23 @@ func loadLoggingConfig() LoggingConfig {
 
 // Validate validates the configuration
 func (c *Config) Validate() error {
-	// Validate server configuration
+	if err := c.validateServer(); err != nil {
+		return err
+	}
+	if err := c.validateDatabase(); err != nil {
+		return err
+	}
+	if err := c.validateMetrics(); err != nil {
+		return err
+	}
+	if err := c.validateAlerts(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateServer validates server configuration
+func (c *Config) validateServer() error {
 	if c.Server.Port < 1 || c.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
 	}
@@ -212,8 +229,11 @@ func (c *Config) Validate() error {
 	if c.Server.Mode != "debug" && c.Server.Mode != "release" && c.Server.Mode != "test" {
 		return fmt.Errorf("invalid server mode: %s", c.Server.Mode)
 	}
+	return nil
+}
 
-	// Validate database configuration
+// validateDatabase validates database configuration
+func (c *Config) validateDatabase() error {
 	if c.Database.Host == "" {
 		return fmt.Errorf("database host is required")
 	}
@@ -225,8 +245,11 @@ func (c *Config) Validate() error {
 	if c.Database.Name == "" {
 		return fmt.Errorf("database name is required")
 	}
+	return nil
+}
 
-	// Validate metrics configuration
+// validateMetrics validates metrics configuration
+func (c *Config) validateMetrics() error {
 	if c.Metrics.CollectionInterval < time.Second {
 		return fmt.Errorf("collection interval must be at least 1 second")
 	}
@@ -234,8 +257,11 @@ func (c *Config) Validate() error {
 	if c.Metrics.RetentionDays < 1 {
 		return fmt.Errorf("retention days must be at least 1")
 	}
+	return nil
+}
 
-	// Validate alert thresholds
+// validateAlerts validates alert configuration
+func (c *Config) validateAlerts() error {
 	if c.Alerts.CPUThreshold < 0 || c.Alerts.CPUThreshold > 100 {
 		return fmt.Errorf("CPU threshold must be between 0 and 100")
 	}
@@ -247,7 +273,6 @@ func (c *Config) Validate() error {
 	if c.Alerts.DiskThreshold < 0 || c.Alerts.DiskThreshold > 100 {
 		return fmt.Errorf("disk threshold must be between 0 and 100")
 	}
-
 	return nil
 }
 
