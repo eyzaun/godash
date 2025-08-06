@@ -6,7 +6,7 @@ This document provides detailed instructions for setting up GoDash System Monito
 
 ### System Requirements
 - **Operating System**: Linux, macOS, or Windows
-- **Go**: Version 1.19 or higher (tested with Go 1.24)
+- **Go**: Version 1.19 or higher (tested with Go 1.21)
 - **PostgreSQL**: Version 12+ (or Docker)
 - **Git**: For version control
 - **Make**: For build automation (optional but recommended)

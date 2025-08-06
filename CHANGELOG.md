@@ -60,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🎯 **Project Structure**: Added web interface files and static assets
 
 ### Technical Details
-- **Backend**: Go 1.24 with Gin framework and GORM ORM
+- **Backend**: Go 1.21 with Gin framework and GORM ORM
 - **Frontend**: Vanilla JavaScript with Chart.js v3.9.1
 - **Database**: PostgreSQL 15+ with optimized time-series storage
 - **Real-time**: WebSocket with message queuing and auto-reconnection
