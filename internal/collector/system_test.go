@@ -16,7 +16,7 @@ func TestNewSystemCollector(t *testing.T) {
 	// Verify default values
 	stats := collector.GetCollectionStats()
 	enabledMetrics := stats["enabled_metrics"].(map[string]bool)
-	
+
 	expectedMetrics := []string{"cpu", "memory", "disk", "network", "processes"}
 	for _, metric := range expectedMetrics {
 		if !enabledMetrics[metric] {
@@ -58,7 +58,7 @@ func TestNewSystemCollector(t *testing.T) {
 
 func TestSystemCollector_GetSystemMetrics(t *testing.T) {
 	collector := NewSystemCollector(nil)
-	
+
 	metrics, err := collector.GetSystemMetrics()
 	if err != nil {
 		t.Fatalf("GetSystemMetrics() failed: %v", err)
@@ -119,7 +119,7 @@ func TestSystemCollector_GetSystemMetrics(t *testing.T) {
 
 func TestSystemCollector_GetSystemInfo(t *testing.T) {
 	collector := NewSystemCollector(nil)
-	
+
 	info, err := collector.GetSystemInfo()
 	if err != nil {
 		t.Fatalf("GetSystemInfo() failed: %v", err)
@@ -149,7 +149,7 @@ func TestSystemCollector_GetSystemInfo(t *testing.T) {
 
 func TestSystemCollector_GetMetricsSnapshot(t *testing.T) {
 	collector := NewSystemCollector(nil)
-	
+
 	snapshot, err := collector.GetMetricsSnapshot()
 	if err != nil {
 		t.Fatalf("GetMetricsSnapshot() failed: %v", err)
@@ -177,20 +177,22 @@ func TestSystemCollector_GetMetricsSnapshot(t *testing.T) {
 
 func TestSystemCollector_StartCollection(t *testing.T) {
 	collector := NewSystemCollector(nil)
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	metricsChan := collector.StartCollection(ctx, 500*time.Millisecond)
-	
+
 	// Should receive at least one metric
 	select {
 	case metrics, ok := <-metricsChan:
 		if !ok {
 			t.Fatal("Metrics channel closed unexpectedly")
 		}
+		// FIX: Proper nil check with return
 		if metrics == nil {
-			t.Error("Received nil metrics")
+			t.Fatal("Received nil metrics")
+			return
 		}
 		if metrics.Hostname == "" {
 			t.Error("Received metrics with empty hostname")
@@ -199,33 +201,35 @@ func TestSystemCollector_StartCollection(t *testing.T) {
 		t.Fatal("Did not receive metrics within timeout")
 	}
 
-	   // Should receive another metric after interval (timeout increased to 3 seconds)
-	   select {
-	   case metrics, ok := <-metricsChan:
-			   if !ok {
-					   t.Fatal("Metrics channel closed unexpectedly")
-			   }
-			   if metrics == nil {
-					   t.Error("Received nil metrics on second iteration")
-			   }
-	   case <-time.After(3 * time.Second):
-			   t.Fatal("Did not receive second metrics within timeout")
-	   }
+	// Should receive another metric after interval (timeout increased to 3 seconds)
+	select {
+	case metrics, ok := <-metricsChan:
+		if !ok {
+			t.Fatal("Metrics channel closed unexpectedly")
+		}
+		// FIX: Proper nil check with return
+		if metrics == nil {
+			t.Fatal("Received nil metrics on second iteration")
+			return
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Did not receive second metrics within timeout")
+	}
 
 	// Cancel context and verify channel closes
 	cancel()
-	
-	   select {
-	   case <-metricsChan:
-			   // Kanal kapalıysa sorun yok, açıksa beklemeden hata verme
-	   case <-time.After(3 * time.Second):
-			   t.Error("Channel should close quickly after context cancellation")
-	   }
+
+	select {
+	case <-metricsChan:
+		// Kanal kapalıysa sorun yok, açıksa beklemeden hata verme
+	case <-time.After(3 * time.Second):
+		t.Error("Channel should close quickly after context cancellation")
+	}
 }
 
 func TestSystemCollector_GetTopProcesses(t *testing.T) {
 	collector := NewSystemCollector(nil)
-	
+
 	processes, err := collector.GetTopProcesses(5, "cpu")
 	if err != nil {
 		t.Fatalf("GetTopProcesses() failed: %v", err)
@@ -270,7 +274,7 @@ func TestSystemCollector_GetTopProcesses(t *testing.T) {
 
 func TestSystemCollector_IsHealthy(t *testing.T) {
 	collector := NewSystemCollector(nil)
-	
+
 	healthy, issues, err := collector.IsHealthy()
 	if err != nil {
 		t.Fatalf("IsHealthy() failed: %v", err)
@@ -290,7 +294,7 @@ func TestSystemCollector_IsHealthy(t *testing.T) {
 
 func TestSystemCollector_SetEnabledMetrics(t *testing.T) {
 	collector := NewSystemCollector(nil)
-	
+
 	// Disable memory collection
 	collector.SetEnabledMetrics(map[string]bool{
 		"memory": false,
@@ -311,10 +315,10 @@ func TestSystemCollector_SetEnabledMetrics(t *testing.T) {
 
 func TestSystemCollector_GetCollectionStats(t *testing.T) {
 	collector := NewSystemCollector(nil)
-	
+
 	// Get initial stats
 	stats := collector.GetCollectionStats()
-	
+
 	if stats == nil {
 		t.Fatal("GetCollectionStats() returned nil")
 	}
@@ -356,7 +360,7 @@ func TestSystemCollector_GetCollectionStats(t *testing.T) {
 
 func TestSystemCollector_Reset(t *testing.T) {
 	collector := NewSystemCollector(nil)
-	
+
 	// Collect some metrics first
 	_, err := collector.GetSystemMetrics()
 	if err != nil {
@@ -386,7 +390,7 @@ func TestSystemCollector_Reset(t *testing.T) {
 // Benchmark tests
 func BenchmarkSystemCollector_GetSystemMetrics(b *testing.B) {
 	collector := NewSystemCollector(nil)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := collector.GetSystemMetrics()
@@ -398,7 +402,7 @@ func BenchmarkSystemCollector_GetSystemMetrics(b *testing.B) {
 
 func BenchmarkSystemCollector_GetSystemInfo(b *testing.B) {
 	collector := NewSystemCollector(nil)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := collector.GetSystemInfo()
@@ -410,7 +414,7 @@ func BenchmarkSystemCollector_GetSystemInfo(b *testing.B) {
 
 func BenchmarkSystemCollector_GetTopProcesses(b *testing.B) {
 	collector := NewSystemCollector(nil)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := collector.GetTopProcesses(10, "cpu")
