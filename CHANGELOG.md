@@ -53,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🧪 **Test Infrastructure**: Comprehensive test suite with mock implementations
 
 ### Changed
-- 🔧 **Server Port**: Changed from 8080 to 8081 for development
+- 🔧 **Server Port**: Standard port 8080 for all environments
 - 🗄️ **Database Port**: Changed from 5432 to 5433 to avoid conflicts
 - ⚡ **Update Frequency**: Increased to 500ms for ultra-responsive dashboard
 - 📊 **Metrics Format**: Enhanced API response format for frontend compatibility

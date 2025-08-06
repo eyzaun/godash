@@ -61,19 +61,19 @@ make run
 ./build/godash
 
 # Access the dashboard
-open http://localhost:8081
+open http://localhost:8080
 ```
 
 ### 5. Verify Installation
 ```bash
 # Check API health
-curl http://localhost:8081/health
+curl http://localhost:8080/health
 
 # Check current metrics
-curl http://localhost:8081/api/v1/metrics/current
+curl http://localhost:8080/api/v1/metrics/current
 
 # Test WebSocket (requires wscat: npm install -g wscat)
-wscat -c ws://localhost:8081/ws
+wscat -c ws://localhost:8080/ws
 ```
 
 ## 🔧 Development Setup
@@ -127,7 +127,7 @@ export PATH=$PATH:$GOPATH/bin
 # For development
 export GODASH_ENV=development
 export GODASH_LOG_LEVEL=debug
-export GODASH_SERVER_PORT=8081
+export GODASH_SERVER_PORT=8080
 export GODASH_DB_PORT=5433
 ```
 
@@ -329,12 +329,12 @@ go tool pprof -http=:6060 ./godash
 make run
 
 # Open dashboard in browser
-open http://localhost:8081
+open http://localhost:8080
 
 # Or visit manually:
-# Windows: start http://localhost:8081
-# Linux: xdg-open http://localhost:8081
-# macOS: open http://localhost:8081
+# Windows: start http://localhost:8080
+# Linux: xdg-open http://localhost:8080
+# macOS: open http://localhost:8080
 ```
 
 ### Dashboard Features
@@ -350,7 +350,7 @@ open http://localhost:8081
 npm install -g wscat
 
 # Connect to WebSocket endpoint
-wscat -c ws://localhost:8081/ws
+wscat -c ws://localhost:8080/ws
 
 # You should see real-time metric updates every 500ms
 ```
@@ -399,7 +399,7 @@ docker run -d --name godash \
 export GODASH_INTERVAL=30s
 export GODASH_LOG_LEVEL=info
 export GODASH_METRICS_ENABLED=cpu,memory,disk
-export GODASH_SERVER_PORT=8081
+export GODASH_SERVER_PORT=8080
 export GODASH_DB_PORT=5433
 export GODASH_WEBSOCKET_ENABLED=true
 ```
@@ -418,16 +418,16 @@ journalctl -u godash -f
 ### Health Checks
 ```bash
 # Application health
-curl http://localhost:8081/health
+curl http://localhost:/health
 
 # Current metrics API
-curl http://localhost:8081/api/v1/metrics/current
+curl http://localhost:8080/api/v1/metrics/current
 
 # System status
-curl http://localhost:8081/api/v1/system/status
+curl http://localhost:8080/api/v1/system/status
 
 # WebSocket connection test
-wscat -c ws://localhost:8081/ws
+wscat -c ws://localhost:8080/ws
 ```
 
 ### Metrics Export
@@ -442,7 +442,7 @@ wscat -c ws://localhost:8081/ws
 - ✅ YAML configuration files (config.yaml, development.yaml, production.yaml)
 - ✅ Environment variable support with fallbacks
 - ✅ Database configuration (PostgreSQL on port 5433)
-- ✅ Server configuration (HTTP on port 8081)
+- ✅ Server configuration (HTTP on port 8080)
 - ✅ WebSocket configuration (real-time updates)
 - ✅ Metrics collection intervals (30s default)
 - ✅ CORS configuration for web dashboard

@@ -78,8 +78,6 @@ func (r *Router) setupMiddleware() {
 		AllowOrigins: []string{
 			"http://localhost:8080",
 			"http://127.0.0.1:8080",
-			"http://localhost:8082",
-			"http://127.0.0.1:8082",
 			"http://localhost:3000", // Development
 		},
 		AllowMethods: []string{

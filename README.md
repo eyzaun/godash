@@ -81,13 +81,13 @@ docker-compose up -d postgres redis
 
 ### Base URL
 ```
-http://localhost:8081/api/v1
+http://localhost:8080/api/v1
 ```
 
 ### 🌐 **Dashboard Access**
-- **Real-time Dashboard**: http://localhost:8081/
-- **WebSocket Endpoint**: ws://localhost:8081/ws
-- **Health Check**: http://localhost:8081/health
+- **Real-time Dashboard**: http://localhost:8080/
+- **WebSocket Endpoint**: ws://localhost:8080/ws
+- **Health Check**: http://localhost:8080/health
 
 ### Core Endpoints
 
@@ -125,22 +125,22 @@ http://localhost:8081/api/v1
 
 ```bash
 # Get current system status
-curl http://localhost:8081/api/v1/system/status
+curl http://localhost:8080/api/v1/system/status
 
 # Get metrics from last hour
-curl "http://localhost:8081/api/v1/metrics/history?from=$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)&limit=100"
+curl "http://localhost:8080/api/v1/metrics/history?from=$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)&limit=100"
 
 # Get average CPU usage over last 24 hours
-curl "http://localhost:8081/api/v1/metrics/average?duration=24h"
+curl "http://localhost:8080/api/v1/metrics/average?duration=24h"
 
 # Get top 5 hosts by memory usage
-curl http://localhost:8081/api/v1/metrics/top/memory?limit=5
+curl http://localhost:8080/api/v1/metrics/top/memory?limit=5
 
 # Test WebSocket connection (requires wscat or similar)
-wscat -c ws://localhost:8081/ws
+wscat -c ws://localhost:8080/ws
 
 # Access real-time dashboard
-open http://localhost:8081/
+open http://localhost:8080/
 ```
 
 ## 🔧 Configuration
@@ -155,7 +155,7 @@ GODASH_DB_PASSWORD=password
 GODASH_DB_NAME=godash
 
 # Application
-GODASH_SERVER_PORT=8081
+GODASH_SERVER_PORT=8080
 GODASH_COLLECTION_INTERVAL=30s
 GODASH_RETENTION_DAYS=7
 GODASH_LOG_LEVEL=debug
@@ -275,7 +275,7 @@ go test -race ./...
 - **Tooltips**: Detailed information on hover
 
 ### Dashboard Access
-Navigate to `http://localhost:8081/` after starting the server to access the real-time dashboard.
+Navigate to `http://localhost:8080/` after starting the server to access the real-time dashboard.
 
 ## �🐳 Docker Deployment
 
