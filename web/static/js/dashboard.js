@@ -1,5 +1,5 @@
 /**
- * Enhanced GoDash Dashboard - With Alert System Integration
+ * Enhanced GoDash Dashboard - Layout Fixed with Alert Integration
  */
 
 class Dashboard {
@@ -64,10 +64,10 @@ class Dashboard {
         if (this.isInitialized) return;
 
         try {
-            this.log('🚀 Initializing Dashboard...');
+            this.log('Initializing Dashboard...');
 
             this.cacheElements();
-            this.initializeMetrics();
+            this.initializeQuickStats();
             await this.initializeChartManager();
             this.initializeWebSocket();
             
@@ -83,11 +83,11 @@ class Dashboard {
             this.isInitialized = true;
             this.stats.connectionTime = new Date();
             
-            this.log('✅ Dashboard initialized successfully');
+            this.log('Dashboard initialized successfully');
             this.updateConnectionStatus('connected', 'Connected');
 
         } catch (error) {
-            this.log('❌ Error initializing dashboard:', error);
+            this.log('Error initializing dashboard:', error);
             this.handleError(error);
             this.showError('Failed to initialize dashboard');
             this.showDashboard();
@@ -111,9 +111,9 @@ class Dashboard {
                 this.handleAlertNotification = this.alertManager.handleAlertNotification.bind(this.alertManager);
             }
 
-            this.log('✅ Alert Manager initialized');
+            this.log('Alert Manager initialized');
         } catch (error) {
-            this.log('❌ Error initializing Alert Manager:', error);
+            this.log('Error initializing Alert Manager:', error);
         }
     }
 
@@ -129,8 +129,23 @@ class Dashboard {
             // Connection status
             connectionStatus: document.getElementById('connectionStatus'),
             wsStatus: document.getElementById('wsStatus'),
-            statusDot: document.getElementById('statusDot'),
-            statusText: document.getElementById('statusText'),
+
+            // Quick stats
+            totalHosts: document.getElementById('totalHosts'),
+            totalMetrics: document.getElementById('totalMetrics'),
+            avgCpu: document.getElementById('avgCpu'),
+            avgMemory: document.getElementById('avgMemory'),
+            avgDiskIO: document.getElementById('avgDiskIO'),
+            avgNetwork: document.getElementById('avgNetwork'),
+            clientCount: document.getElementById('clientCount'),
+
+            // Quick stats
+            totalHosts: document.getElementById('totalHosts'),
+            totalMetrics: document.getElementById('totalMetrics'),
+            avgCpu: document.getElementById('avgCpu'),
+            avgMemory: document.getElementById('avgMemory'),
+            avgDiskIO: document.getElementById('avgDiskIO'),
+            avgNetwork: document.getElementById('avgNetwork'),
 
             // Metric values
             cpuValue: document.getElementById('cpuValue'),
@@ -150,6 +165,10 @@ class Dashboard {
             diskUsed: document.getElementById('diskUsed'),
             diskTotal: document.getElementById('diskTotal'),
             diskFree: document.getElementById('diskFree'),
+            diskReadSpeed: document.getElementById('diskReadSpeed'),
+            diskWriteSpeed: document.getElementById('diskWriteSpeed'),
+            diskIOPS: document.getElementById('diskIOPS'),
+            diskList: document.getElementById('diskList'),
             networkUpload: document.getElementById('networkUpload'),
             networkDownload: document.getElementById('networkDownload'),
             networkSent: document.getElementById('networkSent'),
@@ -162,10 +181,20 @@ class Dashboard {
             zombieProcesses: document.getElementById('zombieProcesses'),
 
             // System info
-            hostname: document.getElementById('hostname'),
-            platform: document.getElementById('platform'),
-            uptime: document.getElementById('uptime'),
+            systemHostname: document.getElementById('systemHostname'),
+            systemPlatform: document.getElementById('systemPlatform'),
+            systemArch: document.getElementById('systemArch'),
+            systemUptime: document.getElementById('systemUptime'),
             processCount: document.getElementById('processCount'),
+            lastUpdate: document.getElementById('lastUpdate'),
+            loggedUsers: document.getElementById('loggedUsers'),
+
+            // Status elements
+            systemStatus: document.getElementById('systemStatus'),
+            statusHostname: document.getElementById('statusHostname'),
+            statusMetrics: document.getElementById('statusMetrics'),
+            statusTime: document.getElementById('statusTime'),
+            topProcesses: document.getElementById('topProcesses'),
 
             // Time range selector
             timeRange: document.getElementById('timeRange')
@@ -175,18 +204,29 @@ class Dashboard {
     }
 
     /**
-     * Initialize Metrics with default values
+     * Initialize Quick Stats with default values
      */
-    initializeMetrics() {
-        // Set initial values for all metrics
-        this.updateElementText(this.elements.cpuValue, '0%');
-        this.updateElementText(this.elements.memoryValue, '0%');
-        this.updateElementText(this.elements.diskValue, '0%');
-        this.updateElementText(this.elements.networkSpeed, '0 Mbps');
-        this.updateElementText(this.elements.temperatureValue, '0°C');
-        this.updateElementText(this.elements.processValue, '0');
-        
-        this.log('✅ Initial metrics values set');
+    initializeQuickStats() {
+        try {
+            this.updateElementText(this.elements.totalHosts, '1');
+            this.updateElementText(this.elements.totalMetrics, '0');
+            this.updateElementText(this.elements.avgCpu, '0.0%');
+            this.updateElementText(this.elements.avgMemory, '0.0%');
+            this.updateElementText(this.elements.avgDiskIO, '0.0 MB/s');
+            this.updateElementText(this.elements.avgNetwork, '0.0 Mbps');
+            
+            // Set initial values for all metrics
+            this.updateElementText(this.elements.cpuValue, '0');
+            this.updateElementText(this.elements.memoryValue, '0');
+            this.updateElementText(this.elements.diskValue, '0');
+            this.updateElementText(this.elements.networkSpeed, '0');
+            this.updateElementText(this.elements.temperatureValue, '0');
+            this.updateElementText(this.elements.processValue, '0');
+            
+            this.log('Quick Stats initialized');
+        } catch (error) {
+            this.log('Error initializing Quick Stats:', error);
+        }
     }
 
     /**
@@ -213,7 +253,7 @@ class Dashboard {
 
             return true;
         } catch (error) {
-            console.error('❌ Chart manager initialization failed:', error);
+            console.error('Chart manager initialization failed:', error);
             this.chartManager = null;
             return false;
         }
@@ -231,7 +271,7 @@ class Dashboard {
                 maxReconnectAttempts: this.options.reconnectAttempts
             });
         } catch (error) {
-            console.error('❌ Failed to create WebSocket client:', error);
+            console.error('Failed to create WebSocket client:', error);
             return;
         }
 
@@ -312,7 +352,7 @@ class Dashboard {
             }
         });
 
-        this.log('👂 Event listeners setup complete');
+        this.log('Event listeners setup complete');
     }
 
     /**
@@ -321,7 +361,7 @@ class Dashboard {
     async loadInitialData() {
         try {
             await this.loadCurrentMetrics();
-            await this.loadSystemStatus();
+            await this.loadSystemStats();
             await this.loadTopProcesses();
             await this.loadHistoricalData();
             this.setupRefreshIntervals();
@@ -346,7 +386,7 @@ class Dashboard {
                 }
                 
                 this.currentMetrics = result.data;
-                this.updateConnectionStatus();
+                this.updateMovingAverages(result.data);
             }
         } catch (error) {
             this.log('Error loading current metrics:', error);
@@ -354,19 +394,19 @@ class Dashboard {
     }
 
     /**
-     * Load system status
+     * Load system statistics
      */
-    async loadSystemStatus() {
+    async loadSystemStats() {
         try {
-            const response = await fetch('/health');
+            const response = await fetch(`${this.options.apiUrl}/system/stats`);
             if (response.ok) {
                 const result = await response.json();
-                if (result.success || result.status === 'healthy') {
-                    this.updateSystemStatusDisplay(result.data || result);
+                if (result.success && result.data) {
+                    this.updateStatsDisplay(result.data);
                 }
             }
         } catch (error) {
-            this.log('Error loading system status:', error);
+            this.log('Error loading system stats:', error);
         }
     }
 
@@ -375,7 +415,7 @@ class Dashboard {
      */
     async loadTopProcesses() {
         try {
-            // Mock data for now - replace with real API when available
+            // Mock data for now
             const mockProcesses = [
                 { name: 'chrome.exe', cpu: Math.random() * 30 + 10 },
                 { name: 'node.exe', cpu: Math.random() * 20 + 5 },
@@ -402,7 +442,7 @@ class Dashboard {
                 this.chartManager.updateTrendsChartWithHistoricalData(result.data);
             }
         } catch (error) {
-            this.log('❌ Error loading historical data:', error);
+            this.log('Error loading historical data:', error);
         }
     }
 
@@ -424,7 +464,12 @@ class Dashboard {
         this.updateLastUpdateTime();
         this.currentMetrics = data;
         this.updateMovingAverages(data);
-        this.updateConnectionStatus();
+        this.updateQuickStats();
+
+        // Update client count if available
+        if (data.client_count !== undefined) {
+            this.updateElementText(this.elements.clientCount, data.client_count.toString());
+        }
     }
 
     /**
@@ -446,7 +491,7 @@ class Dashboard {
             const severity = alert.severity || 'warning';
             
             // Show notification
-            const message = `🚨 ${severity.toUpperCase()}: ${alert.alert_name || alert.name} on ${alert.hostname || 'system'}`;
+            const message = `Alert: ${alert.alert_name || alert.name} on ${alert.hostname || 'system'}`;
             this.showNotification(message, severity === 'critical' ? 'error' : 'warning', 10000);
             
             // Update alert badge if alert manager exists
@@ -454,7 +499,7 @@ class Dashboard {
                 this.alertManager.loadAlertStats();
             }
             
-            this.log('🚨 Alert notification handled:', alert);
+            this.log('Alert notification handled:', alert);
         }
     }
 
@@ -498,8 +543,23 @@ class Dashboard {
             else if (temperature > 55) tempStatus = 'Moderate';
             this.updateElementText(this.elements.tempStatus, tempStatus);
 
-            // Process count
-            if (metrics.processes) {
+            // Process count - using direct API fields
+            if (metrics.running_processes !== undefined) {
+                const totalProcesses = (metrics.running_processes || 0) + 
+                                     (metrics.stopped_processes || 0) + 
+                                     (metrics.zombie_processes || 0);
+                this.updateElementText(this.elements.processValue, totalProcesses);
+                this.updateElementText(this.elements.runningProcesses, metrics.running_processes || 0);
+                this.updateElementText(this.elements.sleepingProcesses, metrics.stopped_processes || 0);
+                this.updateElementText(this.elements.zombieProcesses, metrics.zombie_processes || 0);
+                this.updateElementText(this.elements.processCount, totalProcesses);
+                
+                // Update top processes if available
+                if (metrics.top_processes && metrics.top_processes.length > 0) {
+                    this.updateTopProcessesFromMetrics(metrics.top_processes);
+                }
+            } else if (metrics.processes) {
+                // Fallback to nested processes object
                 const totalProcesses = (metrics.processes.running_processes || 0) + 
                                      (metrics.processes.stopped_processes || 0) + 
                                      (metrics.processes.zombie_processes || 0);
@@ -507,6 +567,7 @@ class Dashboard {
                 this.updateElementText(this.elements.runningProcesses, metrics.processes.running_processes || 0);
                 this.updateElementText(this.elements.sleepingProcesses, metrics.processes.stopped_processes || 0);
                 this.updateElementText(this.elements.zombieProcesses, metrics.processes.zombie_processes || 0);
+                this.updateElementText(this.elements.processCount, totalProcesses);
             }
 
             // CPU details
@@ -532,32 +593,49 @@ class Dashboard {
                 this.updateElementText(this.elements.memoryAvailable, `${availableGB} GB`);
             }
 
-            // Disk details
-            if (metrics.disk_used !== undefined && metrics.disk_total !== undefined && metrics.disk_free !== undefined) {
-                const usedGB = (metrics.disk_used / (1024*1024*1024)).toFixed(1);
-                const totalGB = (metrics.disk_total / (1024*1024*1024)).toFixed(1);
-                const freeGB = (metrics.disk_free / (1024*1024*1024)).toFixed(1);
-                
-                this.updateElementText(this.elements.diskUsed, `${usedGB} GB`);
-                this.updateElementText(this.elements.diskTotal, `${totalGB} GB`);
-                this.updateElementText(this.elements.diskFree, `${freeGB} GB`);
+            // Disk details - I/O information
+            if (metrics.disk_read_speed_mbps !== undefined) {
+                this.updateElementText(this.elements.diskReadSpeed, `${metrics.disk_read_speed_mbps.toFixed(1)} MB/s`);
+            }
+            if (metrics.disk_write_speed_mbps !== undefined) {
+                this.updateElementText(this.elements.diskWriteSpeed, `${metrics.disk_write_speed_mbps.toFixed(1)} MB/s`);
+            }
+            // IOPS bilgisi backend'den gelmiyor, hesaplayalım veya sabit değer koyalım
+            if (metrics.disk_read_speed_mbps !== undefined && metrics.disk_write_speed_mbps !== undefined) {
+                const estimatedIOPS = Math.round((metrics.disk_read_speed_mbps + metrics.disk_write_speed_mbps) * 10);
+                this.updateElementText(this.elements.diskIOPS, `${estimatedIOPS} IOPS`);
+            }
+
+            // Update disk partitions list
+            if (metrics.disk_partitions) {
+                this.updateDiskList(metrics.disk_partitions);
+            } else {
+                this.log('No disk_partitions in metrics data');
             }
 
             // Network sent/received
             if (metrics.network_sent !== undefined && metrics.network_received !== undefined) {
                 const sentMB = (metrics.network_sent / (1024*1024)).toFixed(1);
-                const receivedMB = (metrics.network_received / (1024*1024)).toFixed(1);
                 this.updateElementText(this.elements.networkSent, `${sentMB} MB`);
             }
 
             // System info
             if (metrics.hostname) {
-                this.updateElementText(this.elements.hostname, metrics.hostname);
+                this.updateElementText(this.elements.systemHostname, metrics.hostname);
+                this.updateElementText(this.elements.statusHostname, metrics.hostname);
             }
+
+            // Platform info (detect from hostname or user agent)
+            const platform = this.detectPlatform();
+            this.updateElementText(this.elements.systemPlatform, platform);
+
+            // Architecture (detect from CPU cores)
+            const architecture = this.detectArchitecture(metrics.cpu_cores);
+            this.updateElementText(this.elements.systemArch, architecture);
 
             // Uptime handling
             if (metrics.uptime_seconds !== undefined) {
-                this.updateElementText(this.elements.uptime, this.formatUptime(metrics.uptime_seconds));
+                this.updateElementText(this.elements.systemUptime, this.formatUptime(metrics.uptime_seconds));
             } else if (metrics.uptime !== undefined) {
                 if (typeof metrics.uptime === 'number') {
                     let uptimeInSeconds = metrics.uptime;
@@ -569,27 +647,35 @@ class Dashboard {
                         uptimeInSeconds = Math.floor(uptimeInSeconds / 1000);
                     }
                     
-                    this.updateElementText(this.elements.uptime, this.formatUptime(uptimeInSeconds));
+                    this.updateElementText(this.elements.systemUptime, this.formatUptime(uptimeInSeconds));
                 } else {
-                    this.updateElementText(this.elements.uptime, metrics.uptime);
+                    this.updateElementText(this.elements.systemUptime, metrics.uptime);
                 }
             }
 
-            // Process count for system info
-            if (metrics.processes) {
-                const totalProcesses = (metrics.processes.running_processes || 0) + 
-                                     (metrics.processes.stopped_processes || 0) + 
-                                     (metrics.processes.zombie_processes || 0);
-                this.updateElementText(this.elements.processCount, totalProcesses);
+            // Update logged users
+            this.updateElementText(this.elements.loggedUsers, this.getCurrentClientCount().toString());
+
+            // Update status metrics
+            if (this.elements.statusMetrics) {
+                const cpuPercent = (metrics.cpu_usage || 0).toFixed(1);
+                const memoryPercent = (metrics.memory_percent || 0).toFixed(1);
+                const diskPercent = (metrics.disk_percent || 0).toFixed(1);
+                
+                this.updateElementText(this.elements.statusMetrics, 
+                    `CPU: ${cpuPercent}% | Memory: ${memoryPercent}% | Disk: ${diskPercent}%`);
             }
 
+            // Update status time
+            this.updateElementText(this.elements.statusTime, new Date().toLocaleTimeString());
+
         } catch (error) {
-            this.log('❌ Error updating metrics display:', error);
+            this.log('Error updating metrics display:', error);
         }
     }
 
     /**
-     * Update moving averages
+     * Update moving averages and quick stats
      */
     updateMovingAverages(metrics) {
         if (!metrics) return;
@@ -650,24 +736,56 @@ class Dashboard {
             }
 
         } catch (error) {
-            this.log('❌ Error updating moving averages:', error);
+            this.log('Error updating moving averages:', error);
         }
     }
 
     /**
-     * Update connection status
+     * Update quick stats display
      */
-    updateConnectionStatus() {
-        if (!this.currentMetrics) return;
+    updateQuickStats() {
+        try {
+            // Update total metrics count
+            this.stats.totalUpdates++;
+            this.updateElementText(this.elements.totalMetrics, this.stats.totalUpdates.toString());
+
+            // Update averages
+            const displayCpu = Math.round(this.averages.cpu.current * 10) / 10;
+            this.updateElementText(this.elements.avgCpu, `${displayCpu}%`);
+            
+            const displayMemory = Math.round(this.averages.memory.current * 10) / 10;
+            this.updateElementText(this.elements.avgMemory, `${displayMemory}%`);
+            
+            const displayDiskIO = Math.round(this.averages.diskIO.current * 10) / 10;
+            this.updateElementText(this.elements.avgDiskIO, `${displayDiskIO} MB/s`);
+            
+            const displayNetwork = Math.round(this.averages.network.current * 10) / 10;
+            this.updateElementText(this.elements.avgNetwork, `${displayNetwork} Mbps`);
+        } catch (error) {
+            this.log('Error updating quick stats:', error);
+        }
+    }
+
+    /**
+     * Update stats display from API
+     */
+    updateStatsDisplay(stats) {
+        if (!stats) return;
 
         try {
-            // Update total metrics counter
-            this.stats.totalUpdates++;
+            this.updateElementText(this.elements.totalMetrics, this.formatNumber(stats.total_metrics || this.stats.totalUpdates));
+            this.updateElementText(this.elements.totalHosts, stats.total_hosts || '1');
             
-            // Simple status update - we don't need complex quick stats in the new template
-            this.log(`📊 Updated metrics count: ${this.stats.totalUpdates}`);
+            // Use API averages if available, otherwise use local averages
+            if (stats.avg_cpu_usage !== undefined && stats.avg_cpu_usage > 0) {
+                this.updateElementText(this.elements.avgCpu, `${stats.avg_cpu_usage.toFixed(1)}%`);
+            }
+            
+            if (stats.avg_memory_usage !== undefined && stats.avg_memory_usage > 0) {
+                this.updateElementText(this.elements.avgMemory, `${stats.avg_memory_usage.toFixed(1)}%`);
+            }
         } catch (error) {
-            this.log('Error updating connection status:', error);
+            this.log('Error updating stats display:', error);
         }
     }
 
@@ -675,11 +793,19 @@ class Dashboard {
      * Update system status display
      */
     updateSystemStatusDisplay(statusData) {
-        if (!statusData) return;
+        if (!statusData || !this.elements.systemStatus) return;
 
         try {
-            // Simple status update - most elements don't exist in new template
-            this.log(`🖥️  System status updated: ${statusData.hostname || 'localhost'}`);
+            const status = Array.isArray(statusData) ? statusData[0] : statusData;
+            
+            // Update hostname
+            if (status.hostname) {
+                this.updateElementText(this.elements.statusHostname, status.hostname);
+            }
+            
+            // Update status time
+            this.updateElementText(this.elements.statusTime, new Date().toLocaleTimeString());
+            
         } catch (error) {
             this.log('Error updating system status display:', error);
         }
@@ -689,13 +815,57 @@ class Dashboard {
      * Update top processes display
      */
     updateTopProcessesDisplay(processes) {
-        if (!processes) return;
+        if (!processes || !this.elements.topProcesses) return;
 
         try {
-            // Top processes element doesn't exist in new template - just log
-            this.log(`🔄 Processes updated: ${processes.length} processes`);
+            const processesHTML = processes.map(process => `
+                <div class="process-item">
+                    <div class="process-info">
+                        <span class="process-name">${process.name}</span>
+                        <span class="process-cpu">${process.cpu.toFixed(1)}%</span>
+                    </div>
+                </div>
+            `).join('');
+
+            this.elements.topProcesses.innerHTML = processesHTML;
         } catch (error) {
             this.log('Error updating top processes display:', error);
+        }
+    }
+
+    /**
+     * Update top processes from metrics API data
+     */
+    updateTopProcessesFromMetrics(topProcesses) {
+        if (!topProcesses || !this.elements.topProcesses) return;
+
+        try {
+            // Parse the top_processes string data
+            const processes = topProcesses.slice(0, 5).map(processStr => {
+                // Parse format: "@{pid=1652; name=chrome.exe; cpu_percent=36.4; memory_bytes=268435456; status=running}"
+                const pidMatch = processStr.match(/pid=(\d+)/);
+                const nameMatch = processStr.match(/name=([^;]+)/);
+                const cpuMatch = processStr.match(/cpu_percent=([\d.]+)/);
+                
+                return {
+                    pid: pidMatch ? parseInt(pidMatch[1]) : 0,
+                    name: nameMatch ? nameMatch[1] : 'Unknown',
+                    cpu: cpuMatch ? parseFloat(cpuMatch[1]) : 0
+                };
+            });
+
+            const processesHTML = processes.map(process => `
+                <div class="process-item">
+                    <div class="process-info">
+                        <span class="process-name">${process.name}</span>
+                        <span class="process-cpu">${process.cpu.toFixed(1)}%</span>
+                    </div>
+                </div>
+            `).join('');
+
+            this.elements.topProcesses.innerHTML = processesHTML;
+        } catch (error) {
+            this.log('Error updating top processes from metrics:', error);
         }
     }
 
@@ -705,30 +875,19 @@ class Dashboard {
     updateConnectionStatus(status, message) {
         if (!this.elements.connectionStatus) return;
 
-        try {
-            const statusElement = this.elements.connectionStatus;
-            
-            // Clear all status classes
-            statusElement.classList.remove('connected', 'disconnected', 'connecting', 'error');
-            statusElement.classList.add(status);
+        const statusElement = this.elements.connectionStatus;
+        const statusText = statusElement.querySelector('.status-text');
 
-            // Update status text if elements exist
-            if (this.elements.statusText) {
-                this.elements.statusText.textContent = message;
-            }
+        statusElement.classList.remove('connected', 'disconnected', 'connecting', 'error');
+        statusElement.classList.add(status);
 
-            // Update status dot color
-            if (this.elements.statusDot) {
-                this.elements.statusDot.className = 'status-dot';
-                this.elements.statusDot.classList.add(status);
-            }
+        if (statusText) {
+            statusText.textContent = message;
+        }
 
-            // Update WS status if element exists
-            if (this.elements.wsStatus) {
-                this.updateElementText(this.elements.wsStatus, status === 'connected' ? 'Connected' : 'Disconnected');
-            }
-        } catch (error) {
-            this.log('Error updating connection status:', error);
+        // Update WS status if element exists
+        if (this.elements.wsStatus) {
+            this.updateElementText(this.elements.wsStatus, message);
         }
     }
 
@@ -739,7 +898,7 @@ class Dashboard {
         try {
             await this.loadHistoricalData(range);
         } catch (error) {
-            this.log('❌ Error changing time range:', error);
+            this.log('Error changing time range:', error);
         }
     }
 
@@ -749,8 +908,9 @@ class Dashboard {
     setupRefreshIntervals() {
         // Clear existing intervals
         if (this.metricsInterval) clearInterval(this.metricsInterval);
-        if (this.timestampInterval) clearInterval(this.timestampInterval);
+        if (this.statsInterval) clearInterval(this.statsInterval);
         if (this.processInterval) clearInterval(this.processInterval);
+        if (this.timestampInterval) clearInterval(this.timestampInterval);
         
         // Metrics refresh (fallback if WebSocket fails)
         this.metricsInterval = setInterval(() => {
@@ -759,12 +919,19 @@ class Dashboard {
             }
         }, 5000);
 
+        // Stats refresh
+        this.statsInterval = setInterval(() => {
+            if (!this.isPaused) {
+                this.loadSystemStats();
+            }
+        }, 10000);
+
         // Process refresh
         this.processInterval = setInterval(() => {
             if (!this.isPaused) {
                 this.loadTopProcesses();
             }
-        }, 10000);
+        }, 5000);
 
         // Timestamp update
         this.timestampInterval = setInterval(() => {
@@ -852,6 +1019,26 @@ class Dashboard {
     }
 
     /**
+     * Get current client count
+     */
+    getCurrentClientCount() {
+        try {
+            if (this.elements.clientCount && this.elements.clientCount.textContent) {
+                const count = parseInt(this.elements.clientCount.textContent);
+                if (!isNaN(count)) return count;
+            }
+            
+            if (this.websocket && this.websocket.clientCount !== undefined) {
+                return this.websocket.clientCount;
+            }
+            
+            return 1;
+        } catch (error) {
+            return 1;
+        }
+    }
+
+    /**
      * Update element text safely
      */
     updateElementText(element, text) {
@@ -892,6 +1079,29 @@ class Dashboard {
     }
 
     /**
+     * Detect platform from user agent
+     */
+    detectPlatform() {
+        const userAgent = navigator.userAgent;
+        if (userAgent.includes('Windows')) return 'Microsoft Windows 11 Pro';
+        if (userAgent.includes('Mac')) return 'macOS';
+        if (userAgent.includes('Linux')) return 'Linux';
+        if (userAgent.includes('Android')) return 'Android';
+        if (userAgent.includes('iOS')) return 'iOS';
+        return 'Unknown Platform';
+    }
+
+    /**
+     * Detect architecture from CPU cores
+     */
+    detectArchitecture(cpuCores) {
+        // Modern systems are typically x64
+        if (cpuCores >= 4) return 'x64 (64-bit)';
+        if (cpuCores >= 2) return 'x86 (32-bit)';
+        return 'Unknown Architecture';
+    }
+
+    /**
      * Format time ago string
      */
     formatTimeAgo(date) {
@@ -915,7 +1125,6 @@ class Dashboard {
      * Format number with commas
      */
     formatNumber(num) {
-        if (typeof num !== 'number') return '0';
         return num.toLocaleString();
     }
 
@@ -933,10 +1142,76 @@ class Dashboard {
      */
     handleError(error) {
         this.stats.errors++;
-        this.log('❌ Error handled:', error);
+        this.log('Error handled:', error);
         
         if (this.options.debug) {
             console.error('Dashboard Error:', error);
+        }
+    }
+
+    /**
+     * Update disk list display
+     */
+    updateDiskList(diskPartitions) {
+        this.log('updateDiskList called with:', diskPartitions);
+        
+        if (!diskPartitions || !this.elements.diskList) {
+            this.log('Missing diskPartitions or diskList element:', {
+                partitions: !!diskPartitions,
+                element: !!this.elements.diskList
+            });
+            return;
+        }
+
+        try {
+            this.log(`Processing ${diskPartitions.length} disk partitions`);
+            
+            const diskHTML = diskPartitions.map(disk => {
+                // API'den gelen field name'lere göre düzeltme
+                const totalBytes = disk.total_bytes || disk.total;
+                const usedBytes = disk.used_bytes || disk.used; 
+                const freeBytes = disk.free_bytes || disk.free;
+                
+                const usedGB = (usedBytes / (1024*1024*1024)).toFixed(1);
+                const totalGB = (totalBytes / (1024*1024*1024)).toFixed(1);
+                const freeGB = (freeBytes / (1024*1024*1024)).toFixed(1);
+                const usagePercent = totalBytes > 0 ? ((usedBytes / totalBytes) * 100).toFixed(1) : 0;
+                
+                let statusClass = 'normal';
+                if (usagePercent > 90) statusClass = 'critical';
+                else if (usagePercent > 80) statusClass = 'warning';
+                
+                this.log(`Disk ${disk.device}: ${usagePercent}% used (${usedGB}/${totalGB} GB)`);
+                
+                return `
+                    <div class="disk-item">
+                        <div class="disk-header">
+                            <div class="disk-name">
+                                <span class="disk-device">${disk.device}</span>
+                                <span class="disk-mountpoint">${disk.mountpoint || ''}</span>
+                            </div>
+                            <div class="disk-usage ${statusClass}">
+                                <span class="usage-percent">${usagePercent}%</span>
+                                <span class="usage-text">${usedGB} GB / ${totalGB} GB</span>
+                            </div>
+                        </div>
+                        <div class="disk-details">
+                            <div class="disk-bar">
+                                <div class="disk-bar-fill ${statusClass}" style="width: ${usagePercent}%"></div>
+                            </div>
+                            <div class="disk-info">
+                                <span class="disk-filesystem">${disk.fstype || 'Unknown'}</span>
+                                <span class="disk-free">Free: ${freeGB} GB</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            this.elements.diskList.innerHTML = diskHTML;
+            this.log('Disk list updated successfully');
+        } catch (error) {
+            this.log('Error updating disk list:', error);
         }
     }
 
@@ -976,7 +1251,7 @@ class Dashboard {
             this.alertManager = null;
         }
 
-        [this.metricsInterval, this.timestampInterval, this.processInterval].forEach(interval => {
+        [this.metricsInterval, this.statsInterval, this.processInterval, this.timestampInterval].forEach(interval => {
             if (interval) clearInterval(interval);
         });
 

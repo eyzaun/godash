@@ -163,6 +163,8 @@
             font-size: 3rem;
             margin-bottom: 1.5rem;
             display: block;
+            color: #00d4ff;
+            font-weight: bold;
         }
         
         .card h3 {
@@ -256,6 +258,8 @@
             font-size: 2.5rem;
             margin-bottom: 1rem;
             display: block;
+            color: #00d4ff;
+            font-weight: bold;
         }
         
         .feature-item h3 {
@@ -380,7 +384,7 @@
         
         <div class="grid">
             <div class="card">
-                <span class="card-icon">📊</span>
+                <span class="card-icon">DASH</span>
                 <h3>Real-time Dashboard</h3>
                 <p>Monitor your system's CPU, memory, disk, and network usage with beautiful real-time charts and live WebSocket updates.</p>
                 <a href="/dashboard" class="btn">
@@ -390,7 +394,7 @@
             </div>
             
             <div class="card">
-                <span class="card-icon">📈</span>
+                <span class="card-icon">API</span>
                 <h3>Live Metrics API</h3>
                 <p>Access real-time system metrics through our RESTful API. Perfect for integrations and custom monitoring solutions.</p>
                 <a href="/api/v1/metrics/current" class="btn btn-secondary">
@@ -400,7 +404,7 @@
             </div>
             
             <div class="card">
-                <span class="card-icon">💊</span>
+                <span class="card-icon">HEALTH</span>
                 <h3>Health Monitoring</h3>
                 <p>Comprehensive health checks including database connectivity, service status, and system performance indicators.</p>
                 <a href="/health" class="btn btn-secondary">
@@ -418,37 +422,37 @@
             
             <div class="features-grid">
                 <div class="feature-item">
-                    <span class="feature-icon">⚡</span>
+                    <span class="feature-icon">REALTIME</span>
                     <h3>Real-time Updates</h3>
                     <p>WebSocket connections for instant data updates without page refreshes</p>
                 </div>
                 
                 <div class="feature-item">
-                    <span class="feature-icon">📊</span>
+                    <span class="feature-icon">CHARTS</span>
                     <h3>Interactive Charts</h3>
                     <p>Beautiful Chart.js visualizations with smooth animations and responsive design</p>
                 </div>
                 
                 <div class="feature-item">
-                    <span class="feature-icon">🚨</span>
+                    <span class="feature-icon">ALERTS</span>
                     <h3>Smart Alerts</h3>
                     <p>Configurable alerts with email and webhook notifications for proactive monitoring</p>
                 </div>
                 
                 <div class="feature-item">
-                    <span class="feature-icon">🌐</span>
+                    <span class="feature-icon">REST</span>
                     <h3>RESTful API</h3>
                     <p>Complete REST API for custom integrations and third-party applications</p>
                 </div>
                 
                 <div class="feature-item">
-                    <span class="feature-icon">📱</span>
+                    <span class="feature-icon">MOBILE</span>
                     <h3>Mobile Friendly</h3>
                     <p>Fully responsive design that works perfectly on desktop, tablet, and mobile devices</p>
                 </div>
                 
                 <div class="feature-item">
-                    <span class="feature-icon">🔒</span>
+                    <span class="feature-icon">SECURE</span>
                     <h3>Secure & Fast</h3>
                     <p>Built with Go for high performance and security with minimal resource usage</p>
                 </div>
@@ -462,15 +466,14 @@
                 <a href="/dashboard" class="footer-link">Dashboard</a>
                 <a href="/api/v1/metrics/current" class="footer-link">API</a>
                 <a href="/health" class="footer-link">Health</a>
-                <a href="https://github.com" class="footer-link">GitHub</a>
                 <a href="#" class="footer-link">Documentation</a>
             </div>
-            <p>&copy; 2024 {{.title}} - Real-time System Monitor built with ❤️ using Go</p>
+            <p>&copy; 2024 {{.title}} - Real-time System Monitor built with Go</p>
         </div>
     </footer>
 
     <script>
-        // Add some interactive animations
+        // Add interactive animations and functionality
         document.addEventListener('DOMContentLoaded', function() {
             // Smooth scrolling for internal links
             document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -491,7 +494,6 @@
                 button.addEventListener('click', function(e) {
                     // Don't prevent default for actual links
                     if (this.href && !this.href.includes('#')) {
-                        const originalText = this.innerHTML;
                         this.style.opacity = '0.7';
                         this.style.pointerEvents = 'none';
                         
@@ -524,7 +526,6 @@
                 const statusText = document.querySelector('.status-text');
                 
                 if (response.ok) {
-                    const data = await response.json();
                     statusBanner.style.background = 'linear-gradient(135deg, #4ecdc4, #44a08d)';
                     statusText.textContent = 'System Online - All Services Running';
                 } else {

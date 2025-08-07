@@ -4,260 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.title}} - Real-time System Monitor</title>
+    
+    <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     
-    <!-- Chart.js -->
+    <!-- External Dependencies -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     
-    <style>
-        /* Reset and Base */
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #0a0a0a;
-            color: #ffffff;
-            line-height: 1.6;
-        }
-        
-        /* Loading Screen */
-        .loading-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: #0a0a0a;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-        }
-        
-        .loading-spinner {
-            width: 50px;
-            height: 50px;
-            border: 3px solid #333;
-            border-top: 3px solid #00d4ff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .loading-text {
-            margin-top: 20px;
-            color: #888;
-        }
-        
-        /* Header */
-        .header {
-            background: #1a1a1a;
-            padding: 1rem 2rem;
-            border-bottom: 1px solid #333;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .logo h1 {
-            color: #00d4ff;
-            font-size: 1.8rem;
-            margin: 0;
-        }
-        
-        .version {
-            color: #888;
-            font-size: 0.8rem;
-            margin-left: 0.5rem;
-        }
-        
-        .connection-status {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            background: #333;
-            border-radius: 20px;
-            font-size: 0.9rem;
-        }
-        
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #f44336;
-        }
-        
-        .status-dot.connected { background: #4caf50; }
-        .status-dot.connecting { background: #ff9800; }
-        
-        /* Main Container */
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        
-        /* Cards Grid */
-        .overview-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        
-        .card {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 12px;
-            padding: 1.5rem;
-            transition: all 0.3s ease;
-        }
-        
-        .card:hover {
-            border-color: #00d4ff;
-            box-shadow: 0 4px 20px rgba(0, 212, 255, 0.2);
-        }
-        
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-        
-        .card h3 {
-            color: #00d4ff;
-            font-size: 1.1rem;
-            margin: 0;
-        }
-        
-        .card-value {
-            font-size: 2rem;
-            font-weight: bold;
-            margin-bottom: 1rem;
-            color: #ffffff;
-        }
-        
-        .trend-indicator {
-            font-size: 0.8rem;
-            margin-left: 0.5rem;
-            color: #4caf50;
-        }
-        
-        .card-chart {
-            height: 200px;
-            margin-bottom: 1rem;
-            position: relative;
-        }
-        
-        .card-chart canvas {
-            width: 100% !important;
-            height: 100% !important;
-        }
-        
-        .card-details {
-            border-top: 1px solid #333;
-            padding-top: 1rem;
-        }
-        
-        .detail-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 0.5rem;
-            font-size: 0.9rem;
-        }
-        
-        .detail-item span:first-child {
-            color: #888;
-        }
-        
-        .detail-item span:last-child {
-            color: #ffffff;
-            font-weight: 500;
-        }
-        
-        /* Historical Chart */
-        .charts-section {
-            margin-top: 2rem;
-        }
-        
-        .chart-container {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 12px;
-            padding: 1.5rem;
-        }
-        
-        .chart-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-        
-        .chart-header h3 {
-            color: #00d4ff;
-            margin: 0;
-        }
-        
-        .chart-controls select {
-            background: #333;
-            color: #fff;
-            border: 1px solid #555;
-            border-radius: 6px;
-            padding: 0.5rem;
-        }
-        
-        /* System Info */
-        .info-section {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-top: 2rem;
-        }
-        
-        .info-card {
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 12px;
-            padding: 1.5rem;
-        }
-        
-        .info-card h3 {
-            color: #00d4ff;
-            margin-bottom: 1rem;
-        }
-        
-        /* Responsive */
-        @media (max-width: 768px) {
-            .header {
-                flex-direction: column;
-                gap: 1rem;
-                text-align: center;
-            }
-            
-            .container {
-                padding: 1rem;
-            }
-            
-            .overview-cards {
-                grid-template-columns: 1fr;
-            }
-            
-            .card-value {
-                font-size: 1.5rem;
-            }
-        }
-        
-        /* Hide loading screen when loaded */
-        .loaded .loading-overlay {
-            display: none;
-        }
-    </style>
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="/static/css/dashboard.css">
 </head>
 <body>
     <!-- Loading Screen -->
@@ -268,283 +24,672 @@
 
     <!-- Header -->
     <header class="header">
-        <div class="logo">
-            <h1>{{.title}}</h1>
-            <span class="version">v{{.version}}</span>
-        </div>
-        <div class="connection-status" id="connectionStatus">
-            <div class="status-dot" id="statusDot"></div>
-            <span class="status-text" id="statusText">Connecting...</span>
+        <div class="header-content">
+            <div class="logo">
+                <h1>GoDash Monitor</h1>
+                <span class="version">v{{.version}}</span>
+            </div>
+            <div class="header-controls">
+                <div class="connection-status" id="connectionStatus">
+                    <div class="status-dot"></div>
+                    <span class="status-text">Connecting...</span>
+                </div>
+                {{if .alerts_enabled}}
+                <button class="btn btn-secondary" id="alertsBtn" onclick="toggleAlertsPanel()">
+                    <span class="icon">Alert</span>
+                    <span class="alert-badge" id="alertBadge">0</span>
+                </button>
+                {{end}}
+            </div>
         </div>
     </header>
 
     <!-- Main Container -->
     <div class="container">
+        <!-- Alerts Panel (Collapsible) -->
+        {{if .alerts_enabled}}
+        <div class="alerts-panel" id="alertsPanel">
+            <div class="alerts-header">
+                <h3>Alert Management</h3>
+                <div class="alerts-controls">
+                    <button class="btn btn-primary btn-sm" onclick="showCreateAlertModal()">
+                        Create Alert
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="refreshAlerts()">
+                        Refresh
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Alert Statistics -->
+            <div class="alert-stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalAlerts">0</div>
+                    <div class="stat-label">Total Alerts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="activeAlerts">0</div>
+                    <div class="stat-label">Active</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="triggeredToday">0</div>
+                    <div class="stat-label">Triggered Today</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="unresolvedAlerts">0</div>
+                    <div class="stat-label">Unresolved</div>
+                </div>
+            </div>
+
+            <!-- Recent Alerts -->
+            <div class="recent-alerts">
+                <h4>Recent Alerts</h4>
+                <div class="alerts-list" id="alertsList">
+                    <div class="loading">Loading alerts...</div>
+                </div>
+            </div>
+        </div>
+        {{end}}
+
+        <!-- Quick Stats Section -->
+        <div class="quick-stats-section">
+            <h2>System Overview</h2>
+            <div class="quick-stats-grid">
+                <div class="quick-stat-card">
+                    <div class="quick-stat-header">
+                        <h3>Total Hosts</h3>
+                    </div>
+                    <div class="quick-stat-value" id="totalHosts">1</div>
+                </div>
+                <div class="quick-stat-card">
+                    <div class="quick-stat-header">
+                        <h3>Total Metrics</h3>
+                    </div>
+                    <div class="quick-stat-value" id="totalMetrics">0</div>
+                </div>
+                <div class="quick-stat-card">
+                    <div class="quick-stat-header">
+                        <h3>Avg CPU</h3>
+                    </div>
+                    <div class="quick-stat-value" id="avgCpu">0.0%</div>
+                </div>
+                <div class="quick-stat-card">
+                    <div class="quick-stat-header">
+                        <h3>Avg Memory</h3>
+                    </div>
+                    <div class="quick-stat-value" id="avgMemory">0.0%</div>
+                </div>
+                <div class="quick-stat-card">
+                    <div class="quick-stat-header">
+                        <h3>Avg Disk I/O</h3>
+                    </div>
+                    <div class="quick-stat-value" id="avgDiskIO">0.0 MB/s</div>
+                </div>
+                <div class="quick-stat-card">
+                    <div class="quick-stat-header">
+                        <h3>Avg Network</h3>
+                    </div>
+                    <div class="quick-stat-value" id="avgNetwork">0.0 Mbps</div>
+                </div>
+            </div>
+        </div>
+
         <!-- System Overview Cards -->
-        <div class="overview-cards">
-            <div class="card">
-                <div class="card-header">
-                    <h3>CPU Usage</h3>
-                    <div class="card-value">
-                        <span id="cpuValue">0%</span>
-                        <div class="trend-indicator" id="cpuTrend">●</div>
+        <div class="metrics-section">
+            <h2>Real-time Metrics</h2>
+            <div class="overview-cards">
+                <!-- CPU Usage Card -->
+                <div class="card cpu-card">
+                    <div class="card-header">
+                        <h3>CPU Usage</h3>
+                        <div class="card-value">
+                            <span id="cpuValue">0</span><span class="unit">%</span>
+                            <div class="trend-indicator" id="cpuTrend"></div>
+                        </div>
+                    </div>
+                    <div class="card-chart">
+                        <canvas id="cpu-chart"></canvas>
+                    </div>
+                    <div class="card-details">
+                        <div class="detail-item">
+                            <span>Cores</span>
+                            <span id="cpuCores">0</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Frequency</span>
+                            <span id="cpuFreq">0 GHz</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Load Avg</span>
+                            <span id="loadAvg">0.00</span>
+                        </div>
                     </div>
                 </div>
-                <div class="card-chart">
-                    <canvas id="cpu-chart"></canvas>
-                </div>
-                <div class="card-details">
-                    <div class="detail-item">
-                        <span>Cores:</span>
-                        <span id="cpuCores">0</span>
-                    </div>
-                    <div class="detail-item">
-                        <span>Frequency:</span>
-                        <span id="cpuFreq">0 MHz</span>
-                    </div>
-                    <div class="detail-item">
-                        <span>Load Avg:</span>
-                        <span id="loadAvg">0.00</span>
-                    </div>
-                </div>
-            </div>
 
-            <div class="card">
-                <div class="card-header">
-                    <h3>Memory Usage</h3>
-                    <div class="card-value">
-                        <span id="memoryValue">0%</span>
-                        <div class="trend-indicator" id="memoryTrend">●</div>
+                <!-- Memory Usage Card -->
+                <div class="card memory-card">
+                    <div class="card-header">
+                        <h3>Memory Usage</h3>
+                        <div class="card-value">
+                            <span id="memoryValue">0</span><span class="unit">%</span>
+                            <div class="trend-indicator" id="memoryTrend"></div>
+                        </div>
+                    </div>
+                    <div class="card-chart">
+                        <canvas id="memory-chart"></canvas>
+                    </div>
+                    <div class="card-details">
+                        <div class="detail-item">
+                            <span>Used</span>
+                            <span id="memoryUsed">0 GB</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Total</span>
+                            <span id="memoryTotal">0 GB</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Available</span>
+                            <span id="memoryAvailable">0 GB</span>
+                        </div>
                     </div>
                 </div>
-                <div class="card-chart">
-                    <canvas id="memory-chart"></canvas>
-                </div>
-                <div class="card-details">
-                    <div class="detail-item">
-                        <span>Used:</span>
-                        <span id="memoryUsed">0 GB</span>
-                    </div>
-                    <div class="detail-item">
-                        <span>Total:</span>
-                        <span id="memoryTotal">0 GB</span>
-                    </div>
-                    <div class="detail-item">
-                        <span>Available:</span>
-                        <span id="memoryAvailable">0 GB</span>
-                    </div>
-                </div>
-            </div>
 
-            <div class="card">
-                <div class="card-header">
-                    <h3>Disk Usage</h3>
-                    <div class="card-value">
-                        <span id="diskValue">0%</span>
-                        <div class="trend-indicator" id="diskTrend">●</div>
+                <!-- Disk Usage Card -->
+                <div class="card disk-card">
+                    <div class="card-header">
+                        <h3>Disk Usage</h3>
+                        <div class="card-value">
+                            <span id="diskValue">0</span><span class="unit">%</span>
+                            <div class="trend-indicator" id="diskTrend"></div>
+                        </div>
+                    </div>
+                    <div class="card-chart">
+                        <canvas id="disk-chart"></canvas>
+                    </div>
+                    <div class="card-details">
+                        <div class="detail-item">
+                            <span>Read Speed</span>
+                            <span id="diskReadSpeed">0 MB/s</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Write Speed</span>
+                            <span id="diskWriteSpeed">0 MB/s</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>I/O Operations</span>
+                            <span id="diskIOPS">0 IOPS</span>
+                        </div>
                     </div>
                 </div>
-                <div class="card-chart">
-                    <canvas id="disk-chart"></canvas>
-                </div>
-                <div class="card-details">
-                    <div class="detail-item">
-                        <span>Used:</span>
-                        <span id="diskUsed">0 GB</span>
-                    </div>
-                    <div class="detail-item">
-                        <span>Total:</span>
-                        <span id="diskTotal">0 GB</span>
-                    </div>
-                    <div class="detail-item">
-                        <span>Free:</span>
-                        <span id="diskFree">0 GB</span>
-                    </div>
-                </div>
-            </div>
 
-            <div class="card">
-                <div class="card-header">
-                    <h3>Network Activity</h3>
-                    <div class="card-value">
-                        <span id="networkSpeed">0 Mbps</span>
-                        <div class="trend-indicator" id="networkTrend">●</div>
+                <!-- Network Activity Card -->
+                <div class="card network-card">
+                    <div class="card-header">
+                        <h3>Network Activity</h3>
+                        <div class="card-value">
+                            <span id="networkSpeed">0</span><span class="unit"> Mbps</span>
+                            <div class="trend-indicator" id="networkTrend"></div>
+                        </div>
+                    </div>
+                    <div class="card-chart">
+                        <canvas id="network-chart"></canvas>
+                    </div>
+                    <div class="card-details">
+                        <div class="detail-item">
+                            <span>Upload</span>
+                            <span id="networkUpload">0 Mbps</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Download</span>
+                            <span id="networkDownload">0 Mbps</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Total Sent</span>
+                            <span id="networkSent">0 MB</span>
+                        </div>
                     </div>
                 </div>
-                <div class="card-chart">
-                    <canvas id="network-chart"></canvas>
-                </div>
-                <div class="card-details">
-                    <div class="detail-item">
-                        <span>Upload:</span>
-                        <span id="networkUpload">0 Mbps</span>
-                    </div>
-                    <div class="detail-item">
-                        <span>Download:</span>
-                        <span id="networkDownload">0 Mbps</span>
-                    </div>
-                    <div class="detail-item">
-                        <span>Total Sent:</span>
-                        <span id="networkSent">0 GB</span>
-                    </div>
-                </div>
-            </div>
 
-            <div class="card">
-                <div class="card-header">
-                    <h3>CPU Temperature</h3>
-                    <div class="card-value">
-                        <span id="temperatureValue">0°C</span>
-                        <div class="trend-indicator" id="temperatureTrend">●</div>
+                <!-- CPU Temperature Card -->
+                <div class="card temperature-card">
+                    <div class="card-header">
+                        <h3>CPU Temperature</h3>
+                        <div class="card-value">
+                            <span id="temperatureValue">0</span><span class="unit">°C</span>
+                            <div class="trend-indicator" id="temperatureTrend"></div>
+                        </div>
+                    </div>
+                    <div class="card-chart">
+                        <canvas id="temperature-chart"></canvas>
+                    </div>
+                    <div class="card-details">
+                        <div class="detail-item">
+                            <span>Current</span>
+                            <span id="currentTemp">0°C</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Max Safe</span>
+                            <span>85°C</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Status</span>
+                            <span id="tempStatus">Normal</span>
+                        </div>
                     </div>
                 </div>
-                <div class="card-chart">
-                    <canvas id="temperature-chart"></canvas>
-                </div>
-                <div class="card-details">
-                    <div class="detail-item">
-                        <span>Current:</span>
-                        <span id="currentTemp">0°C</span>
-                    </div>
-                    <div class="detail-item">
-                        <span>Max Safe:</span>
-                        <span>85°C</span>
-                    </div>
-                    <div class="detail-item">
-                        <span>Status:</span>
-                        <span id="tempStatus">Normal</span>
-                    </div>
-                </div>
-            </div>
 
-            <div class="card">
-                <div class="card-header">
-                    <h3>Process Activity</h3>
-                    <div class="card-value">
-                        <span id="processValue">0</span>
-                        <div class="trend-indicator" id="processTrend">●</div>
+                <!-- Process Activity Card -->
+                <div class="card process-card">
+                    <div class="card-header">
+                        <h3>Process Activity</h3>
+                        <div class="card-value">
+                            <span id="processValue">0</span>
+                            <div class="trend-indicator" id="processTrend"></div>
+                        </div>
                     </div>
-                </div>
-                <div class="card-chart">
-                    <canvas id="process-chart"></canvas>
-                </div>
-                <div class="card-details">
-                    <div class="detail-item">
-                        <span>Running:</span>
-                        <span id="runningProcesses">0</span>
+                    <div class="card-chart">
+                        <canvas id="process-chart"></canvas>
                     </div>
-                    <div class="detail-item">
-                        <span>Sleeping:</span>
-                        <span id="sleepingProcesses">0</span>
-                    </div>
-                    <div class="detail-item">
-                        <span>Zombie:</span>
-                        <span id="zombieProcesses">0</span>
+                    <div class="card-details">
+                        <div class="detail-item">
+                            <span>Running</span>
+                            <span id="runningProcesses">0</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Sleeping</span>
+                            <span id="sleepingProcesses">0</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Zombie</span>
+                            <span id="zombieProcesses">0</span>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Historical Charts -->
-        <div class="charts-section">
-            <div class="chart-container">
-                <div class="chart-header">
-                    <h3>System Performance History</h3>
-                    <div class="chart-controls">
-                        <select id="timeRange" onchange="updateTimeRange()">
-                            <option value="1h">Last Hour</option>
-                            <option value="6h">Last 6 Hours</option>
-                            <option value="24h" selected>Last 24 Hours</option>
-                            <option value="7d">Last 7 Days</option>
-                        </select>
-                    </div>
+        <!-- Historical Charts Section -->
+        <div class="trends-section">
+            <h2>System Performance History</h2>
+            <div class="section-header">
+                <div class="chart-controls">
+                    <select id="timeRange" onchange="updateTimeRange()">
+                        <option value="1h">Last Hour</option>
+                        <option value="6h">Last 6 Hours</option>
+                        <option value="24h" selected>Last 24 Hours</option>
+                        <option value="7d">Last 7 Days</option>
+                    </select>
                 </div>
+            </div>
+            <div class="trends-chart-container">
                 <canvas id="trends-chart"></canvas>
             </div>
         </div>
 
-        <!-- System Information -->
+        <!-- Speed Monitoring Section -->
+        <div class="speed-section">
+            <h2>Speed Monitoring</h2>
+            <div class="speed-charts-grid">
+                <!-- Disk I/O Speed Chart -->
+                <div class="speed-chart-card">
+                    <h3>Disk I/O Speed</h3>
+                    <div class="speed-chart-container">
+                        <canvas id="disk-io-speed-chart"></canvas>
+                    </div>
+                    <div class="speed-legend">
+                        <div class="legend-item">
+                            <div class="legend-color read-color"></div>
+                            <span>Read</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color write-color"></div>
+                            <span>Write</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Speed Chart -->
+                <div class="speed-chart-card">
+                    <h3>Network Speed</h3>
+                    <div class="speed-chart-container">
+                        <canvas id="network-speed-chart"></canvas>
+                    </div>
+                    <div class="speed-legend">
+                        <div class="legend-item">
+                            <div class="legend-color upload-color"></div>
+                            <span>Upload</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color download-color"></div>
+                            <span>Download</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Disk Information Section -->
+        <div class="disk-info-section">
+            <h2>Disk Information</h2>
+            <div class="disk-list" id="diskList">
+                <div class="loading">Loading disk information...</div>
+            </div>
+        </div>
+
+        <!-- System Information Grid -->
         <div class="info-section">
-            <div class="info-card">
-                <h3>System Information</h3>
-                <div class="detail-item">
-                    <span>Hostname:</span>
-                    <span id="hostname">Loading...</span>
+            <div class="info-grid">
+                <!-- System Information Card -->
+                <div class="info-card">
+                    <h3>System Information</h3>
+                    <div class="details-list">
+                        <div class="detail-row">
+                            <span>Hostname</span>
+                            <span id="systemHostname">Unknown</span>
+                        </div>
+                        <div class="detail-row">
+                            <span>Platform</span>
+                            <span id="systemPlatform">Unknown</span>
+                        </div>
+                        <div class="detail-row">
+                            <span>Architecture</span>
+                            <span id="systemArch">Unknown</span>
+                        </div>
+                        <div class="detail-row">
+                            <span>Uptime</span>
+                            <span id="systemUptime">0 seconds</span>
+                        </div>
+                        <div class="detail-row">
+                            <span>Total Processes</span>
+                            <span id="processCount">0</span>
+                        </div>
+                        <div class="detail-row">
+                            <span>Last Update</span>
+                            <span id="lastUpdate">Never</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="detail-item">
-                    <span>Platform:</span>
-                    <span id="platform">Unknown</span>
+
+                <!-- System Status Card -->
+                <div class="info-card">
+                    <h3>System Status</h3>
+                    <div class="status-list" id="systemStatus">
+                        <div class="status-item">
+                            <div class="status-item-left">
+                                <div class="status-badge online"></div>
+                                <div class="status-content">
+                                    <div class="status-hostname" id="statusHostname">localhost</div>
+                                    <div class="status-metrics" id="statusMetrics">CPU: 0% | Memory: 0% | Disk: 0%</div>
+                                    <div class="status-time" id="statusTime">Never</div>
+                                </div>
+                            </div>
+                            <div class="status-badge-text online">ONLINE</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="detail-item">
-                    <span>Uptime:</span>
-                    <span id="uptime">0 seconds</span>
+
+                <!-- Top Processes Card -->
+                <div class="info-card">
+                    <h3>Top Processes</h3>
+                    <div class="processes-list" id="topProcesses">
+                        <div class="process-item">
+                            <div class="process-info">
+                                <span class="process-name">Loading...</span>
+                                <span class="process-cpu">0%</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="detail-item">
-                    <span>Processes:</span>
-                    <span id="processCount">0</span>
-                </div>
-                <div class="detail-item">
-                    <span>WebSocket:</span>
-                    <span id="wsStatus">Disconnected</span>
+
+                <!-- Connection Status Card -->
+                <div class="info-card">
+                    <h3>Connection Status</h3>
+                    <div class="details-list">
+                        <div class="detail-row">
+                            <span>WebSocket</span>
+                            <span id="wsStatus">Disconnected</span>
+                        </div>
+                        <div class="detail-row">
+                            <span>Client Count</span>
+                            <span id="clientCount">1</span>
+                        </div>
+                        <div class="detail-row">
+                            <span>Logged Users</span>
+                            <span id="loggedUsers">0</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- JavaScript -->
+    <!-- Alert Creation Modal -->
+    {{if .alerts_enabled}}
+    <div class="modal" id="createAlertModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Alert</h3>
+                <button class="modal-close" onclick="closeCreateAlertModal()">&times;</button>
+            </div>
+            <form id="createAlertForm">
+                <!-- Basic Alert Info -->
+                <div class="form-group">
+                    <label for="alertName">Alert Name *</label>
+                    <input type="text" id="alertName" name="name" required placeholder="High CPU Usage">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="metricType">Metric Type *</label>
+                        <select id="metricType" name="metric_type" required>
+                            <option value="cpu">CPU Usage (%)</option>
+                            <option value="memory">Memory Usage (%)</option>
+                            <option value="disk">Disk Usage (%)</option>
+                            <option value="load_avg_1">Load Average (1min)</option>
+                            <option value="load_avg_5">Load Average (5min)</option>
+                            <option value="load_avg_15">Load Average (15min)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="condition">Condition *</label>
+                        <select id="condition" name="condition" required>
+                            <option value=">">Greater than (>)</option>
+                            <option value=">=">Greater than or equal (>=)</option>
+                            <option value="<">Less than (<)</option>
+                            <option value="<=">Less than or equal (<=)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="threshold">Threshold *</label>
+                        <input type="number" id="threshold" name="threshold" required step="0.1" placeholder="80" min="0" max="100">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="severity">Severity *</label>
+                        <select id="severity" name="severity" required>
+                            <option value="info">Info</option>
+                            <option value="warning" selected>Warning</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="duration">Duration (seconds)</label>
+                    <input type="number" id="duration" name="duration" placeholder="300" min="0">
+                    <small>Alert will trigger only if condition persists for this duration (0 = immediate)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <textarea id="description" name="description" rows="3" placeholder="Optional description"></textarea>
+                </div>
+
+                <!-- Email Notifications -->
+                <div class="form-section">
+                    <h4>Email Notifications</h4>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="emailEnabled" name="email_enabled">
+                            Enable email notifications
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="emailRecipients">Email Recipients</label>
+                        <input type="email" id="emailRecipients" name="email_recipients" multiple placeholder="admin@example.com, ops@example.com" disabled>
+                        <small>Separate multiple emails with commas</small>
+                    </div>
+                </div>
+
+                <!-- Webhook Notifications -->
+                <div class="form-section">
+                    <h4>Webhook Notifications</h4>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="webhookEnabled" name="webhook_enabled">
+                            Enable webhook notifications
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="webhookUrl">Webhook URL</label>
+                        <input type="url" id="webhookUrl" name="webhook_url" placeholder="https://hooks.slack.com/services/..." disabled>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateAlertModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Alert</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {{end}}
+
+    <!-- Notification Container -->
+    <div class="notification-container" id="notifications"></div>
+
+    <!-- JavaScript Files -->
     <script src="/static/js/websocket-client.js"></script>
     <script src="/static/js/chart-manager.js"></script>
     <script src="/static/js/dashboard.js"></script>
-    
+    {{if .alerts_enabled}}
+    <script src="/static/js/alert-manager.js"></script>
+    {{end}}
+
+    <!-- Main Application Initialization -->
     <script>
-        // Initialize Dashboard
+        // Application initialization
         document.addEventListener('DOMContentLoaded', async function() {
+            console.log('Initializing GoDash Dashboard v{{.version}}');
+            
             try {
-                // Show loading screen
-                document.getElementById('loadingOverlay').style.display = 'flex';
-                
-                // Initialize dashboard
+                // Initialize dashboard with configuration
                 const dashboardOptions = {
                     wsUrl: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`,
                     apiUrl: '/api/v1',
-                    debug: window.location.hostname === 'localhost'
+                    alertsEnabled: {{.alerts_enabled}},
+                    debug: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
                 };
-                
+
+                // Create dashboard instance
                 window.dashboard = new Dashboard(dashboardOptions);
+                
+                // Initialize dashboard
                 await window.dashboard.init();
                 
-                // Hide loading screen
-                document.body.classList.add('loaded');
+                {{if .alerts_enabled}}
+                // Initialize alert manager if enabled
+                window.alertManager = new AlertManager('/api/v1');
+                await window.alertManager.init(window.dashboard);
+                
+                // Connect alert manager to dashboard for notifications
+                if (window.dashboard.websocket) {
+                    window.dashboard.websocket.on('alert_triggered', (data) => {
+                        if (window.alertManager.handleAlertNotification) {
+                            window.alertManager.handleAlertNotification(data);
+                        }
+                    });
+                }
+                
+                console.log('Alert Manager initialized and connected');
+                {{end}}
                 
                 console.log('Dashboard initialized successfully');
                 
             } catch (error) {
                 console.error('Failed to initialize dashboard:', error);
-                document.getElementById('loadingOverlay').innerHTML = `
-                    <div style="text-align: center; color: #f44336;">
-                        <h2>Failed to Load Dashboard</h2>
-                        <p>${error.message}</p>
-                        <button onclick="location.reload()" style="
-                            background: #00d4ff; 
-                            color: white; 
-                            border: none; 
-                            padding: 10px 20px; 
-                            border-radius: 6px; 
-                            cursor: pointer;
-                            margin-top: 20px;
-                        ">Retry</button>
-                    </div>
+                
+                // Show error message
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: #f44336;
+                    color: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    z-index: 10000;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
                 `;
+                errorDiv.innerHTML = `
+                    <h3>Dashboard Initialization Failed</h3>
+                    <p>Please refresh the page to try again.</p>
+                    <button onclick="location.reload()" style="margin-top: 10px; padding: 8px 16px; background: white; color: #f44336; border: none; border-radius: 4px; cursor: pointer;">
+                        Refresh Page
+                    </button>
+                `;
+                document.body.appendChild(errorDiv);
             }
         });
-        
-        // Global functions
+
+        // Global functions for template onclick handlers
+        function toggleAlertsPanel() {
+            if (window.alertManager && window.alertManager.toggleAlertsPanel) {
+                window.alertManager.toggleAlertsPanel();
+            }
+        }
+
+        function showCreateAlertModal() {
+            if (window.alertManager && window.alertManager.showCreateAlertModal) {
+                window.alertManager.showCreateAlertModal();
+            }
+        }
+
+        function closeCreateAlertModal() {
+            if (window.alertManager && window.alertManager.closeCreateAlertModal) {
+                window.alertManager.closeCreateAlertModal();
+            }
+        }
+
+        function refreshAlerts() {
+            if (window.alertManager && window.alertManager.refresh) {
+                window.alertManager.refresh();
+            }
+        }
+
         function updateTimeRange() {
             if (window.dashboard && window.dashboard.changeTimeRange) {
                 const range = document.getElementById('timeRange').value;
                 window.dashboard.changeTimeRange(range);
             }
         }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (window.dashboard && window.dashboard.cleanup) {
+                window.dashboard.cleanup();
+            }
+            if (window.alertManager && window.alertManager.cleanup) {
+                window.alertManager.cleanup();
+            }
+        });
     </script>
 </body>
 </html>
