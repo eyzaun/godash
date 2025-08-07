@@ -19,6 +19,9 @@ type CollectorService struct {
 	metricsRepo     repository.MetricsRepository
 	config          *config.Config
 
+	// Alert integration
+	alertService *AlertService
+
 	// Collection state
 	isRunning   bool
 	stopChan    chan bool
@@ -67,6 +70,14 @@ func NewCollectorService(cfg *config.Config, metricsRepo repository.MetricsRepos
 		config:          cfg,
 		stopChan:        make(chan bool, 1),
 	}
+}
+
+// SetAlertService sets the alert service for integration
+func (cs *CollectorService) SetAlertService(alertService *AlertService) {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+	cs.alertService = alertService
+	log.Println("🔗 Alert service integrated with collector service")
 }
 
 // GetSystemCollector returns the system collector
@@ -146,7 +157,7 @@ func (cs *CollectorService) Stop() error {
 
 // processMetrics processes incoming metrics and stores them in database
 func (cs *CollectorService) processMetrics() {
-	log.Println("📊 Starting metrics processing routine...")
+	log.Println("📊 Starting metrics processing routine with alert integration...")
 
 	for {
 		select {
@@ -162,6 +173,7 @@ func (cs *CollectorService) processMetrics() {
 				continue
 			}
 
+			// Store metrics in database
 			if err := cs.storeMetrics(metrics); err != nil {
 				log.Printf("❌ Error storing metrics: %v", err)
 			} else {
@@ -174,6 +186,9 @@ func (cs *CollectorService) processMetrics() {
 					metrics.CPU.Usage, metrics.Memory.Percent, metrics.Disk.Percent)
 			}
 
+			// NEW: Check alerts after storing metrics
+			cs.checkAlerts(metrics)
+
 		case <-cs.stopChan:
 			log.Println("📊 Received stop signal, stopping metrics processing")
 			return
@@ -183,6 +198,28 @@ func (cs *CollectorService) processMetrics() {
 			return
 		}
 	}
+}
+
+// checkAlerts runs alert checking if alert service is available
+func (cs *CollectorService) checkAlerts(metrics *models.SystemMetrics) {
+	cs.mutex.RLock()
+	alertService := cs.alertService
+	cs.mutex.RUnlock()
+
+	if alertService == nil {
+		return // No alert service configured
+	}
+
+	// Run alert checking in background to avoid blocking metrics collection
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("❌ Panic in alert checking: %v", r)
+			}
+		}()
+
+		alertService.CheckMetrics(metrics)
+	}()
 }
 
 // storeMetrics stores system metrics in the database
@@ -266,4 +303,19 @@ func (cs *CollectorService) cleanupOldMetrics() error {
 	}
 
 	return nil
+}
+
+// GetStats returns collector service statistics
+func (cs *CollectorService) GetStats() map[string]interface{} {
+	cs.mutex.RLock()
+	defer cs.mutex.RUnlock()
+
+	stats := map[string]interface{}{
+		"is_running":           cs.isRunning,
+		"collections_count":    cs.collectionsCount,
+		"last_collection_time": cs.lastCollectionTime,
+		"alert_service_linked": cs.alertService != nil,
+	}
+
+	return stats
 }

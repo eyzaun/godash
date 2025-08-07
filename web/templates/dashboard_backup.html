@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.title}} - Real-time System Monitor</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    
+    <!-- External Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading GoDash Dashboard...</div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <h1>{{.title}}</h1>
+                <span class="version">v{{.version}}</span>
+            </div>
+            <div class="header-controls">
+                <div class="connection-status" id="connectionStatus">
+                    <div class="status-dot"></div>
+                    <span class="status-text">Connecting...</span>
+                </div>
+                {{if .alerts_enabled}}
+                <button class="btn btn-secondary" id="alertsBtn" onclick="toggleAlertsPanel()">
+                    <span class="icon">!</span>
+                    <span>Alerts</span>
+                    <span class="alert-badge" id="alertBadge">0</span>
+                </button>
+                {{end}}
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Alerts Panel (Collapsible) -->
+        {{if .alerts_enabled}}
+        <div class="alerts-panel" id="alertsPanel">
+            <div class="alerts-header">
+                <h3>Alert Management</h3>
+                <div class="alerts-controls">
+                    <button class="btn btn-primary btn-sm" onclick="showCreateAlertModal()">
+                        <span class="icon">+</span>
+                        Create Alert
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="refreshAlerts()">
+                        <span class="icon">↻</span>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Alert Statistics -->
+            <div class="alert-stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalAlerts">0</div>
+                    <div class="stat-label">Total Alerts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="activeAlerts">0</div>
+                    <div class="stat-label">Active</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="triggeredToday">0</div>
+                    <div class="stat-label">Triggered Today</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="unresolvedAlerts">0</div>
+                    <div class="stat-label">Unresolved</div>
+                </div>
+            </div>
+
+            <!-- Recent Alerts -->
+            <div class="recent-alerts">
+                <h4>Recent Alerts</h4>
+                <div class="alerts-list" id="alertsList">
+                    <div class="loading">Loading alerts...</div>
+                </div>
+            </div>
+        </div>
+        {{end}}
+
+        <!-- Quick Stats Section -->
+        <div class="quick-stats-section">
+            <h2>Quick Stats</h2>
+            <div class="quick-stats-grid">
+                <div class="quick-stat-card">
+                    <div class="stat-header">
+                        <h3>Total Hosts</h3>
+                        <div class="stat-icon">H</div>
+                    </div>
+                    <div class="stat-value" id="totalHosts">1</div>
+                    <div class="stat-change">+0% from last hour</div>
+                </div>
+                
+                <div class="quick-stat-card">
+                    <div class="stat-header">
+                        <h3>Total Metrics</h3>
+                        <div class="stat-icon">M</div>
+                    </div>
+                    <div class="stat-value" id="totalMetrics">0</div>
+                    <div class="stat-change">Real-time data</div>
+                </div>
+                
+                <div class="quick-stat-card">
+                    <div class="stat-header">
+                        <h3>Avg CPU</h3>
+                        <div class="stat-icon">C</div>
+                    </div>
+                    <div class="stat-value" id="avgCpu">0.0%</div>
+                    <div class="stat-change">Last 5 minutes</div>
+                </div>
+                
+                <div class="quick-stat-card">
+                    <div class="stat-header">
+                        <h3>Avg Memory</h3>
+                        <div class="stat-icon">R</div>
+                    </div>
+                    <div class="stat-value" id="avgMemory">0.0%</div>
+                    <div class="stat-change">Last 5 minutes</div>
+                </div>
+                
+                <div class="quick-stat-card">
+                    <div class="stat-header">
+                        <h3>Avg Disk I/O</h3>
+                        <div class="stat-icon">D</div>
+                    </div>
+                    <div class="stat-value" id="avgDiskIO">0.0 MB/s</div>
+                    <div class="stat-change">Read + Write</div>
+                </div>
+                
+                <div class="quick-stat-card">
+                    <div class="stat-header">
+                        <h3>Avg Network</h3>
+                        <div class="stat-icon">N</div>
+                    </div>
+                    <div class="stat-value" id="avgNetwork">0.0 Mbps</div>
+                    <div class="stat-change">Up + Down</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Overview Cards -->
+        <div class="metrics-section">
+            <h2>System Metrics</h2>
+            <div class="metrics-grid">
+                <!-- CPU Usage Card -->
+                <div class="metric-card cpu-card">
+                    <div class="metric-header">
+                        <h3>CPU Usage</h3>
+                        <div class="metric-icon">CPU</div>
+                    </div>
+                    <div class="metric-value">
+                        <span id="cpuValue">0</span><span class="unit">%</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="cpu-chart"></canvas>
+                    </div>
+                    <div class="metric-details">
+                        <div class="detail-item">
+                            <span>Cores</span>
+                            <span id="cpuCores">0</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Frequency</span>
+                            <span id="cpuFreq">0 GHz</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Load Avg</span>
+                            <span id="loadAvg">0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Memory Usage Card -->
+                <div class="metric-card memory-card">
+                    <div class="metric-header">
+                        <h3>Memory Usage</h3>
+                        <div class="metric-icon">RAM</div>
+                    </div>
+                    <div class="metric-value">
+                        <span id="memoryValue">0</span><span class="unit">%</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="memory-chart"></canvas>
+                    </div>
+                    <div class="metric-details">
+                        <div class="detail-item">
+                            <span>Used</span>
+                            <span id="memoryUsed">0 GB</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Total</span>
+                            <span id="memoryTotal">0 GB</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Available</span>
+                            <span id="memoryAvailable">0 GB</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Disk Usage Card -->
+                <div class="metric-card disk-card">
+                    <div class="metric-header">
+                        <h3>Disk Usage</h3>
+                        <div class="metric-icon">DISK</div>
+                    </div>
+                    <div class="metric-value">
+                        <span id="diskValue">0</span><span class="unit">%</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="disk-chart"></canvas>
+                    </div>
+                    <div class="metric-details">
+                        <div class="detail-item">
+                            <span>Used</span>
+                            <span id="diskUsed">0 GB</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Total</span>
+                            <span id="diskTotal">0 GB</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Free</span>
+                            <span id="diskFree">0 GB</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Activity Card -->
+                <div class="metric-card network-card">
+                    <div class="metric-header">
+                        <h3>Network Activity</h3>
+                        <div class="metric-icon">NET</div>
+                    </div>
+                    <div class="metric-value">
+                        <span id="networkSpeed">0</span><span class="unit"> Mbps</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="network-chart"></canvas>
+                    </div>
+                    <div class="metric-details">
+                        <div class="detail-item">
+                            <span>Upload</span>
+                            <span id="networkUpload">0 Mbps</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Download</span>
+                            <span id="networkDownload">0 Mbps</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Total Sent</span>
+                            <span id="networkSent">0 MB</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CPU Temperature Card -->
+                <div class="metric-card temperature-card">
+                    <div class="metric-header">
+                        <h3>CPU Temperature</h3>
+                        <div class="metric-icon">TEMP</div>
+                    </div>
+                    <div class="metric-value">
+                        <span id="temperatureValue">0</span><span class="unit">°C</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="temperature-chart"></canvas>
+                    </div>
+                    <div class="metric-details">
+                        <div class="detail-item">
+                            <span>Current</span>
+                            <span id="currentTemp">0°C</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Max Safe</span>
+                            <span>85°C</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Status</span>
+                            <span id="tempStatus">Normal</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Process Activity Card -->
+                <div class="metric-card process-card">
+                    <div class="metric-header">
+                        <h3>Process Activity</h3>
+                        <div class="metric-icon">PROC</div>
+                    </div>
+                    <div class="metric-value">
+                        <span id="processValue">0</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="process-chart"></canvas>
+                    </div>
+                    <div class="metric-details">
+                        <div class="detail-item">
+                            <span>Running</span>
+                            <span id="runningProcesses">0</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Sleeping</span>
+                            <span id="sleepingProcesses">0</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Zombie</span>
+                            <span id="zombieProcesses">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historical Charts Section -->
+        <div class="trends-section">
+            <div class="section-header">
+                <h2>System Performance History</h2>
+                <div class="time-range-selector">
+                    <button class="time-btn" data-range="1h">1H</button>
+                    <button class="time-btn" data-range="6h">6H</button>
+                    <button class="time-btn active" data-range="24h">24H</button>
+                    <button class="time-btn" data-range="7d">7D</button>
+                </div>
+            </div>
+            <div class="trends-chart-container">
+                <canvas id="trends-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Speed Monitoring Section -->
+        <div class="speed-section">
+            <h2>Speed Monitoring</h2>
+            <div class="speed-charts-grid">
+                <!-- Disk I/O Speed Chart -->
+                <div class="speed-chart-card">
+                    <h3>Disk I/O Speed</h3>
+                    <div class="speed-chart-container">
+                        <canvas id="disk-io-speed-chart"></canvas>
+                    </div>
+                    <div class="speed-legend">
+                        <div class="legend-item">
+                            <div class="legend-color read-color"></div>
+                            <span>Read Speed</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color write-color"></div>
+                            <span>Write Speed</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Speed Chart -->
+                <div class="speed-chart-card">
+                    <h3>Network Speed</h3>
+                    <div class="speed-chart-container">
+                        <canvas id="network-speed-chart"></canvas>
+                    </div>
+                    <div class="speed-legend">
+                        <div class="legend-item">
+                            <div class="legend-color upload-color"></div>
+                            <span>Upload Speed</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color download-color"></div>
+                            <span>Download Speed</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Information Grid -->
+        <div class="info-grid">
+            <!-- System Information -->
+            <div class="info-card">
+                <h3>System Information</h3>
+                <div class="details-list">
+                    <div class="detail-row">
+                        <span>Hostname</span>
+                        <span id="hostname">Unknown</span>
+                    </div>
+                    <div class="detail-row">
+                        <span>Platform</span>
+                        <span id="platform">Unknown</span>
+                    </div>
+                    <div class="detail-row">
+                        <span>Uptime</span>
+                        <span id="uptime">0 seconds</span>
+                    </div>
+                    <div class="detail-row">
+                        <span>Processes</span>
+                        <span id="processCount">0</span>
+                    </div>
+                    <div class="detail-row">
+                        <span>Last Update</span>
+                        <span id="lastUpdate">Never</span>
+                    </div>
+                    <div class="detail-row">
+                        <span>WebSocket</span>
+                        <span id="wsStatus">Disconnected</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Status -->
+            <div class="info-card">
+                <h3>System Status</h3>
+                <div class="status-list" id="systemStatus">
+                    <div class="status-item">
+                        <div class="status-item-left">
+                            <div class="status-badge online"></div>
+                            <div class="status-content">
+                                <div class="status-hostname" id="statusHostname">Loading...</div>
+                                <div class="status-metrics" id="statusMetrics">Fetching system status...</div>
+                                <div class="status-time" id="statusTime">Just now</div>
+                            </div>
+                        </div>
+                        <div class="status-badge-text online" id="statusBadge">ONLINE</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Processes -->
+            <div class="info-card">
+                <h3>Top Processes</h3>
+                <div class="processes-list" id="topProcesses">
+                    <div class="process-item">
+                        <div class="process-info">
+                            <span class="process-name">Loading processes...</span>
+                            <span class="process-cpu">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Creation Modal -->
+    {{if .alerts_enabled}}
+    <div class="modal" id="createAlertModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Alert</h3>
+                <button class="modal-close" onclick="closeCreateAlertModal()">&times;</button>
+            </div>
+            <form id="createAlertForm">
+                <!-- Basic Alert Info -->
+                <div class="form-group">
+                    <label for="alertName">Alert Name *</label>
+                    <input type="text" id="alertName" name="name" required placeholder="High CPU Usage">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="metricType">Metric Type *</label>
+                        <select id="metricType" name="metric_type" required>
+                            <option value="cpu">CPU Usage (%)</option>
+                            <option value="memory">Memory Usage (%)</option>
+                            <option value="disk">Disk Usage (%)</option>
+                            <option value="load_avg_1">Load Average (1min)</option>
+                            <option value="load_avg_5">Load Average (5min)</option>
+                            <option value="load_avg_15">Load Average (15min)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="condition">Condition *</label>
+                        <select id="condition" name="condition" required>
+                            <option value=">">Greater than (>)</option>
+                            <option value=">=">Greater than or equal (>=)</option>
+                            <option value="<">Less than (<)</option>
+                            <option value="<=">Less than or equal (<=)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="threshold">Threshold *</label>
+                        <input type="number" id="threshold" name="threshold" required step="0.1" placeholder="80" min="0" max="100">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="severity">Severity *</label>
+                        <select id="severity" name="severity" required>
+                            <option value="info">Info</option>
+                            <option value="warning" selected>Warning</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="duration">Duration (seconds)</label>
+                    <input type="number" id="duration" name="duration" placeholder="300" min="0">
+                    <small>Alert will trigger only if condition persists for this duration (0 = immediate)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <textarea id="description" name="description" rows="3" placeholder="Optional description"></textarea>
+                </div>
+
+                <!-- Email Notifications -->
+                <div class="form-section">
+                    <h4>Email Notifications</h4>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="emailEnabled" name="email_enabled">
+                            Enable email notifications
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="emailRecipients">Email Recipients</label>
+                        <input type="email" id="emailRecipients" name="email_recipients" multiple placeholder="admin@example.com, ops@example.com" disabled>
+                        <small>Separate multiple emails with commas</small>
+                    </div>
+                </div>
+
+                <!-- Webhook Notifications -->
+                <div class="form-section">
+                    <h4>Webhook Notifications</h4>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="webhookEnabled" name="webhook_enabled">
+                            Enable webhook notifications
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="webhookUrl">Webhook URL</label>
+                        <input type="url" id="webhookUrl" name="webhook_url" placeholder="https://hooks.slack.com/services/..." disabled>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateAlertModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Alert</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {{end}}
+
+    <!-- Notification Container -->
+    <div class="notification-container" id="notifications"></div>
+
+    <!-- JavaScript Files -->
+    <script src="/static/js/websocket-client.js"></script>
+    <script src="/static/js/chart-manager.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+    {{if .alerts_enabled}}
+    <script src="/static/js/alert-manager.js"></script>
+    {{end}}
+
+    <!-- Main Application Initialization -->
+    <script>
+        // Application initialization
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('Initializing GoDash Dashboard v{{.version}}');
+            
+            try {
+                // Initialize dashboard with configuration
+                const dashboardOptions = {
+                    wsUrl: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`,
+                    apiUrl: '/api/v1',
+                    alertsEnabled: {{.alerts_enabled}},
+                    debug: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                };
+
+                // Create dashboard instance
+                window.dashboard = new Dashboard(dashboardOptions);
+                
+                // Initialize dashboard
+                await window.dashboard.init();
+                
+                {{if .alerts_enabled}}
+                // Initialize alert manager if enabled
+                window.alertManager = new AlertManager('/api/v1');
+                await window.alertManager.init(window.dashboard);
+                
+                // Connect alert manager to dashboard for notifications
+                if (window.dashboard.websocket) {
+                    window.dashboard.websocket.on('alert_triggered', (data) => {
+                        if (window.alertManager.handleAlertNotification) {
+                            window.alertManager.handleAlertNotification(data);
+                        }
+                    });
+                }
+                
+                console.log('Alert Manager initialized and connected');
+                {{end}}
+                
+                console.log('Dashboard initialized successfully');
+                
+                // Setup error handling
+                window.addEventListener('error', function(event) {
+                    console.error('Global error:', event.error);
+                    if (window.dashboard && window.dashboard.showNotification) {
+                        window.dashboard.showNotification('Application error occurred', 'error');
+                    }
+                });
+                
+                // Setup unhandled promise rejection handling
+                window.addEventListener('unhandledrejection', function(event) {
+                    console.error('Unhandled promise rejection:', event.reason);
+                    if (window.dashboard && window.dashboard.showNotification) {
+                        window.dashboard.showNotification('Network error occurred', 'error');
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Failed to initialize dashboard:', error);
+                
+                // Show error message
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: #f44336;
+                    color: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    z-index: 10000;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                `;
+                errorDiv.innerHTML = `
+                    <h3>Dashboard Initialization Failed</h3>
+                    <p>Please refresh the page to try again.</p>
+                    <button onclick="location.reload()" style="margin-top: 10px; padding: 8px 16px; background: white; color: #f44336; border: none; border-radius: 4px; cursor: pointer;">
+                        Refresh Page
+                    </button>
+                `;
+                document.body.appendChild(errorDiv);
+            }
+        });
+
+        // Global functions for template onclick handlers
+        function toggleAlertsPanel() {
+            if (window.alertManager && window.alertManager.toggleAlertsPanel) {
+                window.alertManager.toggleAlertsPanel();
+            }
+        }
+
+        function showCreateAlertModal() {
+            if (window.alertManager && window.alertManager.showCreateAlertModal) {
+                window.alertManager.showCreateAlertModal();
+            }
+        }
+
+        function closeCreateAlertModal() {
+            if (window.alertManager && window.alertManager.closeCreateAlertModal) {
+                window.alertManager.closeCreateAlertModal();
+            }
+        }
+
+        function refreshAlerts() {
+            if (window.alertManager && window.alertManager.refresh) {
+                window.alertManager.refresh();
+            }
+        }
+
+        function updateTimeRange() {
+            if (window.dashboard && window.dashboard.changeTimeRange) {
+                const range = document.getElementById('timeRange').value;
+                window.dashboard.changeTimeRange(range);
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (window.dashboard && window.dashboard.cleanup) {
+                window.dashboard.cleanup();
+            }
+            if (window.alertManager && window.alertManager.cleanup) {
+                window.alertManager.cleanup();
+            }
+        });
+    </script>
+</body>
+</html>

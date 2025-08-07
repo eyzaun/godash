@@ -21,14 +21,25 @@ type Router struct {
 	engine           *gin.Engine
 	config           *config.Config
 	metricsRepo      repository.MetricsRepository
+	alertRepo        repository.AlertRepository
 	collectorService *services.CollectorService
+	alertService     *services.AlertService
 	metricsHandler   *handlers.MetricsHandler
 	healthHandler    *handlers.HealthHandler
 	websocketHandler *handlers.WebSocketHandler
+	alertHandler     *handlers.AlertHandler
 }
 
-// New creates a new API router
-func New(cfg *config.Config, metricsRepo repository.MetricsRepository, collectorService *services.CollectorService) *Router {
+// New creates a new API router with alert system
+func New(
+	cfg *config.Config,
+	metricsRepo repository.MetricsRepository,
+	alertRepo repository.AlertRepository,
+	collectorService *services.CollectorService,
+	alertService *services.AlertService,
+	emailSender services.EmailSender,
+	webhookSender services.WebhookSender,
+) *Router {
 	// Set gin mode
 	gin.SetMode(cfg.Server.Mode)
 
@@ -39,15 +50,19 @@ func New(cfg *config.Config, metricsRepo repository.MetricsRepository, collector
 	metricsHandler := handlers.NewMetricsHandler(metricsRepo, collectorService.GetSystemCollector())
 	healthHandler := handlers.NewHealthHandler(metricsRepo)
 	websocketHandler := handlers.NewWebSocketHandler(metricsRepo, collectorService.GetSystemCollector())
+	alertHandler := handlers.NewAlertHandler(alertRepo, alertService, emailSender, webhookSender)
 
 	router := &Router{
 		engine:           engine,
 		config:           cfg,
 		metricsRepo:      metricsRepo,
+		alertRepo:        alertRepo,
 		collectorService: collectorService,
+		alertService:     alertService,
 		metricsHandler:   metricsHandler,
 		healthHandler:    healthHandler,
 		websocketHandler: websocketHandler,
+		alertHandler:     alertHandler,
 	}
 
 	// Setup middleware
@@ -135,6 +150,23 @@ func (r *Router) setupRoutes() {
 			metricsGroup.POST("", r.metricsHandler.CreateMetric) // For manual metric insertion
 		}
 
+		// NEW: Alert routes
+		alertGroup := v1.Group("/alerts")
+		{
+			// Alert configuration
+			alertGroup.POST("", r.alertHandler.CreateAlert)
+			alertGroup.GET("", r.alertHandler.GetAlerts)
+			alertGroup.GET("/:id", r.alertHandler.GetAlert)
+			alertGroup.PUT("/:id", r.alertHandler.UpdateAlert)
+			alertGroup.DELETE("/:id", r.alertHandler.DeleteAlert)
+
+			// Alert history and management
+			alertGroup.GET("/history", r.alertHandler.GetAlertHistory)
+			alertGroup.POST("/:id/test", r.alertHandler.TestAlert)
+			alertGroup.GET("/stats", r.alertHandler.GetAlertStats)
+			alertGroup.POST("/history/:id/resolve", r.alertHandler.ResolveAlert)
+		}
+
 		// System routes
 		systemGroup := v1.Group("/system")
 		{
@@ -175,6 +207,11 @@ func (r *Router) setupRoutes() {
 
 			adminGroup.DELETE("/metrics/cleanup", r.metricsHandler.CleanupOldMetrics)
 			adminGroup.GET("/database/stats", r.healthHandler.DatabaseStats)
+
+			// NEW: Admin alert routes
+			if r.alertHandler != nil {
+				adminGroup.GET("/alerts/stats", r.alertHandler.GetAlertStats)
+			}
 		}
 	}
 
@@ -185,8 +222,9 @@ func (r *Router) setupRoutes() {
 	// Single dashboard route (simplified)
 	dashboardHandler := func(c *gin.Context) {
 		c.HTML(http.StatusOK, "dashboard.html", gin.H{
-			"title":   "GoDash System Monitor",
-			"version": "1.0.0",
+			"title":          "GoDash System Monitor",
+			"version":        "1.0.0",
+			"alerts_enabled": r.config.Alerts != nil && r.config.Alerts.EnableAlerts,
 		})
 	}
 
@@ -227,7 +265,7 @@ func (r *Router) setupRoutes() {
 
 // startWebSocketBroadcasting starts the WebSocket metrics broadcasting goroutine
 func (r *Router) startWebSocketBroadcasting() {
-	log.Println("🚀 Starting ultra-fast WebSocket broadcasting...")
+	log.Println("🚀 Starting ultra-fast WebSocket broadcasting with alert notifications...")
 
 	// Start metrics broadcasting every 500ms for ultra real-time updates
 	ctx := context.Background()
@@ -257,6 +295,11 @@ func (r *Router) GetEngine() *gin.Engine {
 // GetWebSocketHandler returns the WebSocket handler
 func (r *Router) GetWebSocketHandler() *handlers.WebSocketHandler {
 	return r.websocketHandler
+}
+
+// GetAlertHandler returns the Alert handler
+func (r *Router) GetAlertHandler() *handlers.AlertHandler {
+	return r.alertHandler
 }
 
 // Start starts the HTTP server

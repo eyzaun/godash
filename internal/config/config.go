@@ -12,6 +12,9 @@ type Config struct {
 	Server   ServerConfig   `json:"server" yaml:"server"`
 	Database DatabaseConfig `json:"database" yaml:"database"`
 	Metrics  MetricsConfig  `json:"metrics" yaml:"metrics"`
+	Alerts   *AlertConfig   `json:"alerts" yaml:"alerts"`
+	Email    *EmailConfig   `json:"email" yaml:"email"`
+	Webhook  *WebhookConfig `json:"webhook" yaml:"webhook"`
 }
 
 // ServerConfig holds HTTP server configuration
@@ -50,12 +53,41 @@ type MetricsConfig struct {
 	BufferSize         int           `json:"buffer_size" yaml:"buffer_size"`
 }
 
+// AlertConfig holds alert system configuration
+type AlertConfig struct {
+	EnableAlerts   bool          `json:"enable_alerts" yaml:"enable_alerts"`
+	CheckInterval  time.Duration `json:"check_interval" yaml:"check_interval"`
+	CooldownPeriod time.Duration `json:"cooldown_period" yaml:"cooldown_period"`
+}
+
+// EmailConfig holds email notification configuration
+type EmailConfig struct {
+	Enabled      bool   `json:"enabled" yaml:"enabled"`
+	SMTPHost     string `json:"smtp_host" yaml:"smtp_host"`
+	SMTPPort     int    `json:"smtp_port" yaml:"smtp_port"`
+	SMTPUsername string `json:"smtp_username" yaml:"smtp_username"`
+	SMTPPassword string `json:"smtp_password" yaml:"smtp_password"`
+	FromEmail    string `json:"from_email" yaml:"from_email"`
+	FromName     string `json:"from_name" yaml:"from_name"`
+	UseTLS       bool   `json:"use_tls" yaml:"use_tls"`
+}
+
+// WebhookConfig holds webhook notification configuration
+type WebhookConfig struct {
+	DefaultTimeout time.Duration `json:"default_timeout" yaml:"default_timeout"`
+	MaxRetries     int           `json:"max_retries" yaml:"max_retries"`
+	RetryDelay     time.Duration `json:"retry_delay" yaml:"retry_delay"`
+}
+
 // Load loads configuration from environment variables with defaults
 func Load() (*Config, error) {
 	config := &Config{
 		Server:   loadServerConfig(),
 		Database: loadDatabaseConfig(),
 		Metrics:  loadMetricsConfig(),
+		Alerts:   loadAlertConfig(),
+		Email:    loadEmailConfig(),
+		Webhook:  loadWebhookConfig(),
 	}
 
 	// Validate configuration
@@ -108,6 +140,38 @@ func loadMetricsConfig() MetricsConfig {
 	}
 }
 
+// loadAlertConfig loads alert configuration from environment variables
+func loadAlertConfig() *AlertConfig {
+	return &AlertConfig{
+		EnableAlerts:   getEnvBool("ALERTS_ENABLE", true),
+		CheckInterval:  getEnvDuration("ALERTS_CHECK_INTERVAL", 30*time.Second),
+		CooldownPeriod: getEnvDuration("ALERTS_COOLDOWN_PERIOD", 5*time.Minute),
+	}
+}
+
+// loadEmailConfig loads email configuration from environment variables
+func loadEmailConfig() *EmailConfig {
+	return &EmailConfig{
+		Enabled:      getEnvBool("EMAIL_ENABLED", false),
+		SMTPHost:     getEnvString("EMAIL_SMTP_HOST", ""),
+		SMTPPort:     getEnvInt("EMAIL_SMTP_PORT", 587),
+		SMTPUsername: getEnvString("EMAIL_SMTP_USERNAME", ""),
+		SMTPPassword: getEnvString("EMAIL_SMTP_PASSWORD", ""),
+		FromEmail:    getEnvString("EMAIL_FROM_EMAIL", ""),
+		FromName:     getEnvString("EMAIL_FROM_NAME", "GoDash Monitor"),
+		UseTLS:       getEnvBool("EMAIL_USE_TLS", true),
+	}
+}
+
+// loadWebhookConfig loads webhook configuration from environment variables
+func loadWebhookConfig() *WebhookConfig {
+	return &WebhookConfig{
+		DefaultTimeout: getEnvDuration("WEBHOOK_TIMEOUT", 10*time.Second),
+		MaxRetries:     getEnvInt("WEBHOOK_MAX_RETRIES", 3),
+		RetryDelay:     getEnvDuration("WEBHOOK_RETRY_DELAY", 2*time.Second),
+	}
+}
+
 // Validate validates the configuration
 func (c *Config) Validate() error {
 	// Validate server configuration
@@ -139,6 +203,47 @@ func (c *Config) Validate() error {
 
 	if c.Metrics.RetentionDays < 1 {
 		return fmt.Errorf("retention days must be at least 1")
+	}
+
+	// Validate alert configuration
+	if c.Alerts != nil {
+		if c.Alerts.CheckInterval < time.Second {
+			return fmt.Errorf("alert check interval must be at least 1 second")
+		}
+
+		if c.Alerts.CooldownPeriod < 0 {
+			return fmt.Errorf("alert cooldown period cannot be negative")
+		}
+	}
+
+	// Validate email configuration
+	if c.Email != nil && c.Email.Enabled {
+		if c.Email.SMTPHost == "" {
+			return fmt.Errorf("SMTP host is required when email is enabled")
+		}
+
+		if c.Email.SMTPPort < 1 || c.Email.SMTPPort > 65535 {
+			return fmt.Errorf("invalid SMTP port: %d", c.Email.SMTPPort)
+		}
+
+		if c.Email.FromEmail == "" {
+			return fmt.Errorf("from email is required when email is enabled")
+		}
+	}
+
+	// Validate webhook configuration
+	if c.Webhook != nil {
+		if c.Webhook.DefaultTimeout <= 0 {
+			return fmt.Errorf("webhook timeout must be positive")
+		}
+
+		if c.Webhook.MaxRetries < 0 {
+			return fmt.Errorf("webhook max retries cannot be negative")
+		}
+
+		if c.Webhook.RetryDelay < 0 {
+			return fmt.Errorf("webhook retry delay cannot be negative")
+		}
 	}
 
 	return nil

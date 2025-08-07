@@ -1,5 +1,5 @@
 /**
- * Optimized Chart Manager - 262 lines removed, all functionality preserved
+ * Enhanced Chart Manager - Performance Optimized with Alert Integration
  */
 
 class ChartManager {
@@ -13,10 +13,11 @@ class ChartManager {
             animationDuration: 300,
             updateInterval: 1000,
             theme: 'dark',
+            alertThresholds: true, // NEW: Show alert thresholds on charts
             ...options
         };
 
-        // Chart instances - CLEANED (removed unused charts)
+        // Chart instances
         this.charts = {
             cpu: null,
             memory: null,
@@ -27,8 +28,7 @@ class ChartManager {
             trends: null,
             diskIOSpeed: null,
             networkSpeed: null,
-            // Dynamic partition charts
-            partitions: new Map(), // NEW: Dynamic partition charts
+            partitions: new Map()
         };
 
         // Chart data storage
@@ -39,6 +39,9 @@ class ChartManager {
                 network: { upload: [], download: [], labels: [] }
             }
         };
+
+        // Alert thresholds for visual indicators
+        this.alertThresholds = new Map();
 
         this.isInitialized = false;
         this.colors = this.getColorScheme();
@@ -69,7 +72,8 @@ class ChartManager {
             networkDownload: '#5b6fee',
             text: '#ffffff',
             textSecondary: '#b0b0b0',
-            grid: 'rgba(255, 255, 255, 0.1)'
+            grid: 'rgba(255, 255, 255, 0.1)',
+            alertLine: 'rgba(244, 67, 54, 0.8)' // NEW: Alert threshold line color
         };
     }
 
@@ -88,7 +92,8 @@ class ChartManager {
                     titleColor: '#fff',
                     bodyColor: '#fff',
                     borderColor: '#333',
-                    borderWidth: 1
+                    borderWidth: 1,
+                    cornerRadius: 8
                 }
             },
             animation: {
@@ -114,7 +119,7 @@ class ChartManager {
     }
 
     /**
-     * Initialize all charts - SIMPLIFIED
+     * Initialize all charts
      */
     initializeCharts() {
         try {
@@ -148,7 +153,7 @@ class ChartManager {
     }
 
     /**
-     * Initialize donut chart - UNIFIED method
+     * Initialize donut chart
      */
     initializeDonutChart(type, color) {
         const canvas = document.getElementById(`${type}-chart`);
@@ -189,7 +194,7 @@ class ChartManager {
                 }
             });
             
-            console.log(`✅ ${type} chart initialized successfully with data:`, this.getInitialDonutData(type), 'colors:', this.getDonutColors(type, color));
+            console.log(`✅ ${type} chart initialized successfully`);
         } catch (error) {
             console.error(`❌ Error initializing ${type} chart:`, error);
         }
@@ -202,9 +207,9 @@ class ChartManager {
         const labels = {
             cpu: ['Used', 'Available'],
             memory: ['Used', 'Available'],
-            disk: ['Read', 'Write'], // Like Process Activity: Read/Write distribution
-            network: ['Upload', 'Download'], // Like Process Activity: Upload/Download distribution
-            temperature: ['Current', 'Safe Range'], // Temperature percentage of max
+            disk: ['Read', 'Write'],
+            network: ['Upload', 'Download'],
+            temperature: ['Current', 'Safe Range'],
             process: ['Running', 'Sleeping', 'Zombie']
         };
         return labels[type] || ['Used', 'Available'];
@@ -217,9 +222,9 @@ class ChartManager {
         const initialData = {
             cpu: [0, 100],
             memory: [0, 100],
-            disk: [50, 50], // Equal Read/Write initially
-            network: [50, 50], // Equal Upload/Download initially
-            temperature: [50, 50], // 50% of max temp (45°C of 85°C max)
+            disk: [50, 50],
+            network: [50, 50],
+            temperature: [50, 50],
             process: [10, 80, 0]
         };
         return initialData[type] || [0, 100];
@@ -232,13 +237,10 @@ class ChartManager {
         if (type === 'process') {
             return [this.colors.success, this.colors.process, this.colors.error];
         } else if (type === 'disk') {
-            // Read: Red, Write: Orange (like Process Activity colors)
             return [this.colors.diskRead, this.colors.diskWrite];
         } else if (type === 'network') {
-            // Upload: Orange, Download: Blue (like Process Activity colors)
             return [this.colors.networkUpload, this.colors.networkDownload];
         } else if (type === 'temperature') {
-            // Current temp: Red, Safe range: Gray
             return [this.colors.temperature, 'rgba(255, 255, 255, 0.1)'];
         }
         return [primaryColor, 'rgba(255, 255, 255, 0.1)'];
@@ -248,34 +250,31 @@ class ChartManager {
      * Format donut chart tooltip
      */
     formatDonutTooltip(type, context) {
-        if (type === 'disk') {
-            // Show percentage for disk I/O
-            return context.label + ': ' + context.parsed.toFixed(1) + '%';
-        } else if (type === 'network') {
-            // Show percentage for network
-            return context.label + ': ' + context.parsed.toFixed(1) + '%';
-        } else if (type === 'temperature') {
-            // Show percentage for temperature
-            return context.label + ': ' + context.parsed.toFixed(1) + '%';
-        } else if (type === 'process') {
+        const suffixes = {
+            cpu: '%',
+            memory: '%',
+            disk: '%',
+            network: '%',
+            temperature: '%'
+        };
+        
+        if (type === 'process') {
             return context.label + ': ' + context.parsed;
         }
         
-        const suffixes = {
-            cpu: '%',
-            memory: '%'
-        };
         const suffix = suffixes[type] || '%';
-        
         return context.label + ': ' + context.parsed + suffix;
     }
 
     /**
-     * Initialize speed chart - UNIFIED method
+     * Initialize speed chart
      */
     initializeSpeedChart(type, canvasId, datasets, unit) {
         const canvas = document.getElementById(canvasId);
-        if (!canvas) return;
+        if (!canvas) {
+            console.warn(`❌ ${canvasId} canvas not found`);
+            return;
+        }
 
         try {
             if (this.charts[type]) {
@@ -305,15 +304,26 @@ class ChartManager {
                     scales: {
                         x: {
                             display: true,
-                            grid: { color: this.colors.grid },
-                            ticks: { color: this.colors.textSecondary, maxTicksLimit: 8 }
+                            grid: { 
+                                color: this.colors.grid,
+                                drawBorder: false 
+                            },
+                            ticks: { 
+                                color: this.colors.textSecondary, 
+                                maxTicksLimit: 8,
+                                font: { size: 11 }
+                            }
                         },
                         y: {
                             display: true,
                             beginAtZero: true,
-                            grid: { color: this.colors.grid },
+                            grid: { 
+                                color: this.colors.grid,
+                                drawBorder: false 
+                            },
                             ticks: {
                                 color: this.colors.textSecondary,
+                                font: { size: 11 },
                                 callback: (value) => value + ' ' + unit
                             }
                         }
@@ -337,11 +347,14 @@ class ChartManager {
     }
 
     /**
-     * Initialize trends chart
+     * Initialize trends chart with alert threshold support
      */
     initializeTrendsChart() {
         const canvas = document.getElementById('trends-chart');
-        if (!canvas) return;
+        if (!canvas) {
+            console.warn('❌ trends-chart canvas not found');
+            return;
+        }
 
         try {
             if (this.charts.trends) {
@@ -391,16 +404,27 @@ class ChartManager {
                     scales: {
                         x: {
                             display: true,
-                            grid: { color: this.colors.grid },
-                            ticks: { color: this.colors.textSecondary, maxTicksLimit: 10 }
+                            grid: { 
+                                color: this.colors.grid,
+                                drawBorder: false
+                            },
+                            ticks: { 
+                                color: this.colors.textSecondary, 
+                                maxTicksLimit: 10,
+                                font: { size: 11 }
+                            }
                         },
                         y: {
                             display: true,
                             beginAtZero: true,
                             max: 100,
-                            grid: { color: this.colors.grid },
+                            grid: { 
+                                color: this.colors.grid,
+                                drawBorder: false
+                            },
                             ticks: {
                                 color: this.colors.textSecondary,
+                                font: { size: 11 },
                                 callback: (value) => value + '%'
                             }
                         }
@@ -408,7 +432,13 @@ class ChartManager {
                     plugins: {
                         legend: {
                             display: true,
-                            labels: { color: this.colors.text, usePointStyle: true }
+                            labels: { 
+                                color: this.colors.text, 
+                                usePointStyle: true,
+                                padding: 15,
+                                font: { size: 12 }
+                            },
+                            position: 'top'
                         },
                         tooltip: {
                             ...this.defaultOptions.plugins.tooltip,
@@ -433,88 +463,25 @@ class ChartManager {
         if (!metrics || !this.isInitialized) return;
 
         try {
-            // Update donut charts
+            // Update donut charts with performance optimization
             this.updateDonutChart('cpu', Math.min(100, Math.max(0, metrics.cpu_usage || 0)));
             this.updateDonutChart('memory', Math.min(100, Math.max(0, metrics.memory_percent || 0)));
             
-            // Disk chart shows read/write speed distribution like Process Activity
-            if (metrics.disk_read_speed_mbps !== undefined && metrics.disk_write_speed_mbps !== undefined) {
-                const readSpeed = Math.max(0, metrics.disk_read_speed_mbps || 0);
-                const writeSpeed = Math.max(0, metrics.disk_write_speed_mbps || 0);
-                const totalSpeed = readSpeed + writeSpeed;
-                
-                if (totalSpeed > 0) {
-                    const readPercent = (readSpeed / totalSpeed) * 100;
-                    const writePercent = (writeSpeed / totalSpeed) * 100;
-                    this.charts.disk.data.datasets[0].data = [readPercent, writePercent];
-                } else {
-                    // When no activity, show equal distribution
-                    this.charts.disk.data.datasets[0].data = [50, 50];
-                }
-                this.charts.disk.update('active');
-            } else {
-                // Fallback: show equal distribution
-                this.charts.disk.data.datasets[0].data = [50, 50];
-                this.charts.disk.update('active');
-            }
+            // Disk chart shows read/write speed distribution
+            this.updateDiskChart(metrics);
+            
+            // Network chart shows upload/download distribution
+            this.updateNetworkChart(metrics);
 
-            // Network chart shows upload/download distribution like Process Activity
-            if (metrics.network_upload_speed_mbps !== undefined && metrics.network_download_speed_mbps !== undefined) {
-                const uploadSpeed = Math.max(0, metrics.network_upload_speed_mbps || 0);
-                const downloadSpeed = Math.max(0, metrics.network_download_speed_mbps || 0);
-                const totalSpeed = uploadSpeed + downloadSpeed;
-                
-                if (totalSpeed > 0) {
-                    const uploadPercent = (uploadSpeed / totalSpeed) * 100;
-                    const downloadPercent = (downloadSpeed / totalSpeed) * 100;
-                    this.charts.network.data.datasets[0].data = [uploadPercent, downloadPercent];
-                } else {
-                    // When no activity, show equal distribution
-                    this.charts.network.data.datasets[0].data = [50, 50];
-                }
-                this.charts.network.update('active');
-            } else if (metrics.network_sent !== undefined && metrics.network_received !== undefined) {
-                // Fallback: use bytes data
-                const sent = Math.max(0, metrics.network_sent || 0);
-                const received = Math.max(0, metrics.network_received || 0);
-                const total = sent + received;
-                
-                if (total > 0) {
-                    const sentPercent = (sent / total) * 100;
-                    const receivedPercent = (received / total) * 100;
-                    this.charts.network.data.datasets[0].data = [sentPercent, receivedPercent];
-                } else {
-                    this.charts.network.data.datasets[0].data = [50, 50];
-                }
-                this.charts.network.update('active');
-            } else {
-                // No data available
-                this.charts.network.data.datasets[0].data = [50, 50];
-                this.charts.network.update('active');
-            }
-
-            // Temperature chart - use updateDonutChart like others
+            // Temperature chart
             const temperature = Math.min(85, Math.max(0, metrics.cpu_temperature_c || metrics.simulated_temperature || 45));
-            // Convert to percentage of max safe temperature (85°C)
             const tempPercentage = (temperature / 85) * 100;
             this.updateDonutChart('temperature', tempPercentage);
 
-            // Process chart - manual update because it has 3 values
-            if (metrics.processes) {
-                const running = metrics.processes.running_processes || 0;
-                const sleeping = metrics.processes.stopped_processes || 0;
-                const zombie = metrics.processes.zombie_processes || 0;
-                this.charts.process.data.datasets[0].data = [running, sleeping, zombie];
-            } else {
-                // Mock data with realistic numbers
-                const running = Math.floor(Math.random() * 50) + 10; // 10-59
-                const sleeping = Math.floor(Math.random() * 200) + 100; // 100-299
-                const zombie = Math.floor(Math.random() * 5); // 0-4
-                this.charts.process.data.datasets[0].data = [running, sleeping, zombie];
-            }
-            this.charts.process.update('active');
+            // Process chart
+            this.updateProcessChart(metrics);
             
-            // Update speed charts with proper validation
+            // Update speed charts with performance optimization
             this.updateSpeedChart('diskIOSpeed', 
                 Math.max(0, metrics.disk_read_speed_mbps || 0),
                 Math.max(0, metrics.disk_write_speed_mbps || 0)
@@ -534,10 +501,92 @@ class ChartManager {
     }
 
     /**
-     * Update donut chart - UNIFIED method
+     * Update disk chart with I/O distribution
+     */
+    updateDiskChart(metrics) {
+        if (!this.charts.disk) return;
+
+        if (metrics.disk_read_speed_mbps !== undefined && metrics.disk_write_speed_mbps !== undefined) {
+            const readSpeed = Math.max(0, metrics.disk_read_speed_mbps || 0);
+            const writeSpeed = Math.max(0, metrics.disk_write_speed_mbps || 0);
+            const totalSpeed = readSpeed + writeSpeed;
+            
+            if (totalSpeed > 0) {
+                const readPercent = (readSpeed / totalSpeed) * 100;
+                const writePercent = (writeSpeed / totalSpeed) * 100;
+                this.charts.disk.data.datasets[0].data = [readPercent, writePercent];
+            } else {
+                this.charts.disk.data.datasets[0].data = [50, 50];
+            }
+            
+            this.charts.disk.update('active');
+        }
+    }
+
+    /**
+     * Update network chart with upload/download distribution
+     */
+    updateNetworkChart(metrics) {
+        if (!this.charts.network) return;
+
+        if (metrics.network_upload_speed_mbps !== undefined && metrics.network_download_speed_mbps !== undefined) {
+            const uploadSpeed = Math.max(0, metrics.network_upload_speed_mbps || 0);
+            const downloadSpeed = Math.max(0, metrics.network_download_speed_mbps || 0);
+            const totalSpeed = uploadSpeed + downloadSpeed;
+            
+            if (totalSpeed > 0) {
+                const uploadPercent = (uploadSpeed / totalSpeed) * 100;
+                const downloadPercent = (downloadSpeed / totalSpeed) * 100;
+                this.charts.network.data.datasets[0].data = [uploadPercent, downloadPercent];
+            } else {
+                this.charts.network.data.datasets[0].data = [50, 50];
+            }
+            
+            this.charts.network.update('active');
+        } else if (metrics.network_sent !== undefined && metrics.network_received !== undefined) {
+            const sent = Math.max(0, metrics.network_sent || 0);
+            const received = Math.max(0, metrics.network_received || 0);
+            const total = sent + received;
+            
+            if (total > 0) {
+                const sentPercent = (sent / total) * 100;
+                const receivedPercent = (received / total) * 100;
+                this.charts.network.data.datasets[0].data = [sentPercent, receivedPercent];
+            } else {
+                this.charts.network.data.datasets[0].data = [50, 50];
+            }
+            
+            this.charts.network.update('active');
+        }
+    }
+
+    /**
+     * Update process chart
+     */
+    updateProcessChart(metrics) {
+        if (!this.charts.process) return;
+
+        if (metrics.processes) {
+            const running = metrics.processes.running_processes || 0;
+            const sleeping = metrics.processes.stopped_processes || 0;
+            const zombie = metrics.processes.zombie_processes || 0;
+            this.charts.process.data.datasets[0].data = [running, sleeping, zombie];
+        } else {
+            // Mock data with realistic numbers
+            const running = Math.floor(Math.random() * 50) + 10;
+            const sleeping = Math.floor(Math.random() * 200) + 100;
+            const zombie = Math.floor(Math.random() * 5);
+            this.charts.process.data.datasets[0].data = [running, sleeping, zombie];
+        }
+        
+        this.charts.process.update('active');
+    }
+
+    /**
+     * Update donut chart
      */
     updateDonutChart(type, value) {
-        if (!this.charts[type]) return;
+        if (!this.charts[type] || !this.charts[type].data || !this.charts[type].data.datasets[0]) return;
 
         const usage = Math.min(100, Math.max(0, value));
         const available = 100 - usage;
@@ -547,12 +596,11 @@ class ChartManager {
     }
 
     /**
-     * Update speed chart - FIXED method with proper validation
+     * Update speed chart with performance optimization
      */
     updateSpeedChart(type, value1, value2) {
-        if (!this.charts[type]) return;
+        if (!this.charts[type] || !this.charts[type].data) return;
 
-        // Validate input values
         const validValue1 = Math.max(0, Number(value1) || 0);
         const validValue2 = Math.max(0, Number(value2) || 0);
 
@@ -563,7 +611,7 @@ class ChartManager {
         this.charts[type].data.datasets[0].data.push(validValue1);
         this.charts[type].data.datasets[1].data.push(validValue2);
 
-        // Keep only last N data points
+        // Keep only last N data points for performance
         const maxPoints = this.options.maxDataPoints;
         if (this.charts[type].data.labels.length > maxPoints) {
             this.charts[type].data.labels.shift();
@@ -575,7 +623,7 @@ class ChartManager {
     }
 
     /**
-     * Update trends chart
+     * Update trends chart with performance optimization
      */
     updateTrendsChart(metrics) {
         if (!this.charts.trends) return;
@@ -591,7 +639,7 @@ class ChartManager {
         this.charts.trends.data.datasets[1].data.push(memoryUsage);
         this.charts.trends.data.datasets[2].data.push(diskUsage);
 
-        // Keep only last N data points
+        // Keep only last N data points for performance
         const maxPoints = this.options.maxDataPoints;
         if (this.charts.trends.data.labels.length > maxPoints) {
             this.charts.trends.data.labels.shift();
@@ -639,62 +687,67 @@ class ChartManager {
     }
 
     /**
-     * Resize charts
+     * Set alert thresholds for visual indicators
      */
-    resizeCharts() {
-        try {
-            Object.values(this.charts).forEach(chart => {
-                if (chart) {
-                    chart.resize();
+    setAlertThresholds(thresholds) {
+        this.alertThresholds.clear();
+        
+        if (thresholds && Array.isArray(thresholds)) {
+            thresholds.forEach(threshold => {
+                if (threshold.metric_type && threshold.threshold) {
+                    this.alertThresholds.set(threshold.metric_type, {
+                        value: threshold.threshold,
+                        severity: threshold.severity || 'warning'
+                    });
                 }
             });
-        } catch (error) {
-            console.error('❌ Error resizing charts:', error);
+            
+            // Redraw charts with alert lines
+            this.addAlertLinesToCharts();
         }
     }
 
     /**
-     * Get statistics
+     * Add alert threshold lines to charts
      */
-    getStats() {
-        const activeCharts = Object.values(this.charts).filter(chart => chart !== null).length;
-        
-        return {
-            isInitialized: this.isInitialized,
-            chartsCount: activeCharts,
-            maxDataPoints: this.options.maxDataPoints,
-            updateInterval: this.options.updateInterval,
-            theme: this.options.theme,
-            chartTypes: {
-                donut: 6, // cpu, memory, disk, network, temperature, process
-                line: 3   // trends, diskIOSpeed, networkSpeed
+    addAlertLinesToCharts() {
+        if (!this.options.alertThresholds || !this.charts.trends) return;
+
+        const cpuThreshold = this.alertThresholds.get('cpu');
+        const memoryThreshold = this.alertThresholds.get('memory');
+        const diskThreshold = this.alertThresholds.get('disk');
+
+        // Add horizontal line plugins for alert thresholds
+        const alertPlugin = {
+            id: 'alertThresholds',
+            afterDraw: (chart) => {
+                const ctx = chart.ctx;
+                const chartArea = chart.chartArea;
+                
+                ctx.save();
+                ctx.strokeStyle = this.colors.alertLine;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                
+                if (cpuThreshold) {
+                    const yPos = chart.scales.y.getPixelForValue(cpuThreshold.value);
+                    ctx.beginPath();
+                    ctx.moveTo(chartArea.left, yPos);
+                    ctx.lineTo(chartArea.right, yPos);
+                    ctx.stroke();
+                }
+                
+                ctx.restore();
             }
         };
+
+        // Register and update chart with plugin
+        Chart.register(alertPlugin);
+        this.charts.trends.update();
     }
 
     /**
-     * Destroy all charts
-     */
-    destroyCharts() {
-        Object.keys(this.charts).forEach(key => {
-            if (key === 'partitions') {
-                // Handle partitions Map separately
-                return;
-            }
-            if (this.charts[key] && typeof this.charts[key].destroy === 'function') {
-                this.charts[key].destroy();
-                this.charts[key] = null;
-            }
-        });
-
-        // Destroy partition charts
-        this.destroyPartitionCharts();
-        
-        console.log('🗑️ All charts destroyed');
-    }
-
-    /**
-     * Initialize individual partition chart (optimized to match existing charts)
+     * Initialize individual partition chart
      */
     initializePartitionChart(index, partition) {
         const canvasId = `partition-chart-${index}`;
@@ -706,7 +759,6 @@ class ChartManager {
         }
 
         try {
-            // Destroy existing chart if it exists
             if (this.charts.partitions.has(index)) {
                 this.charts.partitions.get(index).destroy();
             }
@@ -714,7 +766,6 @@ class ChartManager {
             const ctx = canvas.getContext('2d');
             const usagePercent = partition.usage_percent || 0;
 
-            // Use the exact same configuration as your existing charts for consistency
             const chart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -733,9 +784,7 @@ class ChartManager {
                     ...this.defaultOptions,
                     plugins: {
                         ...this.defaultOptions.plugins,
-                        legend: {
-                            display: false
-                        },
+                        legend: { display: false },
                         tooltip: {
                             ...this.defaultOptions.plugins.tooltip,
                             callbacks: {
@@ -756,7 +805,7 @@ class ChartManager {
     }
 
     /**
-     * Update partition chart with new data (matching existing chart update pattern)
+     * Update partition chart with new data
      */
     updatePartitionChart(index, usagePercent) {
         const chart = this.charts.partitions.get(index);
@@ -766,15 +815,12 @@ class ChartManager {
         }
 
         try {
-            // Update data exactly like existing charts
             chart.data.datasets[0].data = [usagePercent, 100 - usagePercent];
             
-            // Update color safely - check if backgroundColor array exists
             if (chart.data.datasets[0].backgroundColor && Array.isArray(chart.data.datasets[0].backgroundColor)) {
                 chart.data.datasets[0].backgroundColor[0] = this.getDiskUsageColor(usagePercent);
             }
             
-            // Use 'active' update mode like all other existing charts for consistency
             chart.update('active');
         } catch (error) {
             console.error(`❌ Error updating partition chart ${index}:`, error);
@@ -788,7 +834,69 @@ class ChartManager {
         if (percentage > 90) return '#e74c3c'; // Red
         if (percentage > 80) return '#f39c12'; // Orange  
         if (percentage > 70) return '#f1c40f'; // Yellow
-        return this.colors.primary; // Default blue/green
+        return this.colors.primary; // Default blue
+    }
+
+    /**
+     * Resize charts
+     */
+    resizeCharts() {
+        try {
+            Object.values(this.charts).forEach(chart => {
+                if (chart && typeof chart.resize === 'function') {
+                    chart.resize();
+                }
+            });
+            
+            // Handle partition charts
+            this.charts.partitions.forEach(chart => {
+                if (chart && typeof chart.resize === 'function') {
+                    chart.resize();
+                }
+            });
+        } catch (error) {
+            console.error('❌ Error resizing charts:', error);
+        }
+    }
+
+    /**
+     * Get statistics
+     */
+    getStats() {
+        const activeCharts = Object.values(this.charts).filter(chart => chart !== null).length;
+        const partitionCharts = this.charts.partitions.size;
+        
+        return {
+            isInitialized: this.isInitialized,
+            chartsCount: activeCharts + partitionCharts,
+            maxDataPoints: this.options.maxDataPoints,
+            updateInterval: this.options.updateInterval,
+            theme: this.options.theme,
+            alertThresholds: this.alertThresholds.size,
+            chartTypes: {
+                donut: 6, // cpu, memory, disk, network, temperature, process
+                line: 3,  // trends, diskIOSpeed, networkSpeed
+                partitions: partitionCharts
+            }
+        };
+    }
+
+    /**
+     * Destroy all charts
+     */
+    destroyCharts() {
+        Object.keys(this.charts).forEach(key => {
+            if (key === 'partitions') {
+                this.destroyPartitionCharts();
+                return;
+            }
+            if (this.charts[key] && typeof this.charts[key].destroy === 'function') {
+                this.charts[key].destroy();
+                this.charts[key] = null;
+            }
+        });
+        
+        console.log('🗑️ All charts destroyed');
     }
 
     /**
@@ -803,18 +911,14 @@ class ChartManager {
         });
         this.charts.partitions.clear();
     }
-
-    /**
-     * Format bytes utility
-     */
-    formatBytes(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
 }
 
 // Make globally available
-window.ChartManager = ChartManager;
+if (typeof window !== 'undefined') {
+    window.ChartManager = ChartManager;
+}
+
+// Export for Node.js
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = ChartManager;
+}

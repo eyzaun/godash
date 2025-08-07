@@ -1,21 +1,93 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
+  # Main GoDash application
+  godash:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: godash-monitor
+    ports:
+      - "8080:8080"
+    environment:
+      # Server configuration
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+      - SERVER_MODE=release
+      
+      # Database configuration
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=godash
+      - DB_PASSWORD=secure_password_123
+      - DB_NAME=godash
+      - DB_SSL_MODE=disable
+      - DB_MAX_OPEN_CONNS=25
+      - DB_MAX_IDLE_CONNS=5
+      
+      # Metrics configuration
+      - METRICS_COLLECTION_INTERVAL=30s
+      - METRICS_RETENTION_DAYS=30
+      - METRICS_ENABLE_CPU=true
+      - METRICS_ENABLE_MEMORY=true
+      - METRICS_ENABLE_DISK=true
+      - METRICS_ENABLE_NETWORK=true
+      - METRICS_ENABLE_PROCESSES=true
+      
+      # Alert system configuration
+      - ALERTS_ENABLE=true
+      - ALERTS_CHECK_INTERVAL=30s
+      - ALERTS_COOLDOWN_PERIOD=5m
+      
+      # Email configuration (disabled by default)
+      - EMAIL_ENABLED=false
+      - EMAIL_SMTP_HOST=
+      - EMAIL_SMTP_PORT=587
+      - EMAIL_SMTP_USERNAME=
+      - EMAIL_SMTP_PASSWORD=
+      - EMAIL_FROM_EMAIL=
+      - EMAIL_FROM_NAME=GoDash Monitor
+      - EMAIL_USE_TLS=true
+      
+      # Webhook configuration
+      - WEBHOOK_TIMEOUT=10s
+      - WEBHOOK_MAX_RETRIES=3
+      - WEBHOOK_RETRY_DELAY=2s
+      
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - godash-network
+    volumes:
+      - godash-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.godash.rule=Host(`godash.localhost`)"
+      - "traefik.http.services.godash.loadbalancer.server.port=8080"
+
+  # PostgreSQL database
   postgres:
     image: postgres:15-alpine
     container_name: godash-postgres
-    restart: unless-stopped
     environment:
-      POSTGRES_DB: godash
-      POSTGRES_USER: godash
-      POSTGRES_PASSWORD: password
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+      - POSTGRES_DB=godash
+      - POSTGRES_USER=godash
+      - POSTGRES_PASSWORD=secure_password_123
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     ports:
-      - "5433:5432"
+      - "5433:5432"  # External access for development
+    restart: unless-stopped
     networks:
       - godash-network
     healthcheck:
@@ -24,137 +96,58 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    command: >
+      postgres 
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.max=10000
+      -c pg_stat_statements.track=all
+      -c max_connections=100
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
 
-  # Redis (for future caching needs)
+  # Redis for caching (optional)
   redis:
     image: redis:7-alpine
     container_name: godash-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass "redis-password"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     ports:
       - "6379:6379"
+    restart: unless-stopped
     networks:
       - godash-network
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
-      retries: 5
-
-  # GoDash Application
-  godash:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
-    container_name: godash-app
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      # Database configuration
-      GODASH_DB_HOST: postgres
-      GODASH_DB_PORT: 5432  # Internal container port stays 5432
-      GODASH_DB_USER: godash
-      GODASH_DB_PASSWORD: password
-      GODASH_DB_NAME: godash
-      GODASH_DB_SSL_MODE: disable
-      
-      # Application configuration
-      GODASH_SERVER_MODE: release
-      GODASH_SERVER_PORT: 8080
-      GODASH_COLLECTION_INTERVAL: 30s
-      GODASH_RETENTION_DAYS: 30
-      GODASH_LOG_LEVEL: info
-      
-      # Metrics configuration
-      GODASH_ENABLE_CPU: "true"
-      GODASH_ENABLE_MEMORY: "true"
-      GODASH_ENABLE_DISK: "true"
-      GODASH_ENABLE_NETWORK: "true"
-      GODASH_ENABLE_PROCESSES: "true"
-    ports:
-      - "8080:8080"
-    volumes:
-      - godash_logs:/var/log/godash
-      - ./configs:/app/configs:ro
-    networks:
-      - godash-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
       retries: 3
-      start_period: 60s
 
-  # Nginx Reverse Proxy (Optional)
+  # NGINX reverse proxy (optional)
   nginx:
     image: nginx:alpine
     container_name: godash-nginx
-    restart: unless-stopped
-    depends_on:
-      - godash
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
-      - nginx_logs:/var/log/nginx
-    networks:
-      - godash-network
-    profiles:
-      - nginx  # Only start nginx when explicitly requested
-
-  # Prometheus for metrics collection (Optional)
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: godash-prometheus
-    restart: unless-stopped
+      - godash-logs:/var/log/nginx
     depends_on:
       - godash
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=30d'
-      - '--web.enable-lifecycle'
-    networks:
-      - godash-network
-    profiles:
-      - monitoring
-
-  # Grafana for dashboards (Optional)
-  grafana:
-    image: grafana/grafana:latest
-    container_name: godash-grafana
     restart: unless-stopped
-    depends_on:
-      - prometheus
-    ports:
-      - "3000:3000"
-    environment:
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_USERS_ALLOW_SIGN_UP: "false"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
     networks:
       - godash-network
-    profiles:
-      - monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 # Named volumes for data persistence
 volumes:
@@ -162,16 +155,10 @@ volumes:
     driver: local
   redis_data:
     driver: local
-  godash_logs:
-    driver: local
-  nginx_logs:
-    driver: local
-  prometheus_data:
-    driver: local
-  grafana_data:
+  godash-logs:
     driver: local
 
-# Network for service communication
+# Custom network
 networks:
   godash-network:
     driver: bridge

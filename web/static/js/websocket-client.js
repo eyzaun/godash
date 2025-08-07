@@ -1,11 +1,11 @@
 /**
- * Optimized WebSocket Client - 51 lines removed, all functionality preserved
+ * Enhanced WebSocket Client - With Alert Notification Support
  */
 
 class WebSocketClient {
     constructor(options = {}) {
         this.options = {
-            url: this.getWebSocketURL(),
+            url: options.url || this.getWebSocketURL(),
             reconnectInterval: 5000,
             maxReconnectAttempts: 10,
             heartbeatInterval: 5000,
@@ -29,6 +29,8 @@ class WebSocketClient {
             message: [],
             metrics: [],
             system_status: [],
+            alert_triggered: [], // NEW: Alert handlers
+            alert_resolved: [],  // NEW: Alert resolved handlers
             pong: []
         };
 
@@ -41,7 +43,8 @@ class WebSocketClient {
             messagesSent: 0,
             reconnectCount: 0,
             connectionTime: null,
-            lastMessageTime: null
+            lastMessageTime: null,
+            alertsReceived: 0 // NEW: Alert statistics
         };
 
         this.log('WebSocket client initialized', this.options);
@@ -116,12 +119,14 @@ class WebSocketClient {
             
             // Debug visual feedback
             if (this.options.debug && window.location.hostname === 'localhost') {
-                this.showDebugMessage('✅ WebSocket Connected!', 'green');
+                this.showDebugMessage('WebSocket Connected!', '#4ecdc4');
             }
             
             this.reconnectAttempts = 0;
             this.stats.connectionTime = new Date();
-            this.stats.reconnectCount += (this.stats.connectionTime ? 1 : 0);
+            if (this.stats.connectionTime) {
+                this.stats.reconnectCount++;
+            }
 
             this.startHeartbeat();
             this.processMessageQueue();
@@ -149,11 +154,11 @@ class WebSocketClient {
         };
 
         this.ws.onerror = (event) => {
-            console.error('💥 WebSocket ERROR!', event);
+            console.error('WebSocket ERROR!', event);
             
             // Debug visual feedback
             if (this.options.debug && window.location.hostname === 'localhost') {
-                this.showDebugMessage('❌ WebSocket Connection Error!', 'red');
+                this.showDebugMessage('WebSocket Connection Error!', '#f44336');
             }
             
             this.handleError(event);
@@ -165,18 +170,29 @@ class WebSocketClient {
     }
 
     /**
-     * Show debug message (simplified)
+     * Show debug message (for localhost debugging)
      */
     showDebugMessage(text, color) {
         const div = document.createElement('div');
-        div.style.cssText = `position:fixed;top:10px;right:10px;background:${color};color:white;padding:10px;z-index:9999;border-radius:5px;`;
+        div.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: ${color};
+            color: white;
+            padding: 10px;
+            z-index: 9999;
+            border-radius: 5px;
+            font-size: 14px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        `;
         div.textContent = text;
         document.body.appendChild(div);
         setTimeout(() => div.remove(), 3000);
     }
 
     /**
-     * Handle incoming messages
+     * Handle incoming messages - ENHANCED with alert support
      */
     handleMessage(event) {
         this.stats.messagesReceived++;
@@ -186,16 +202,87 @@ class WebSocketClient {
             const message = JSON.parse(event.data);
             this.log('📨 Received message:', message.type);
 
+            // Generic message handler
             this.trigger('message', message);
 
-            if (message.type && this.eventHandlers[message.type]) {
-                this.trigger(message.type, message.data, message);
+            // Handle different message types
+            switch (message.type) {
+                case 'metrics':
+                    this.trigger('metrics', message.data, message);
+                    break;
+                    
+                case 'system_status':
+                    this.trigger('system_status', message.data, message);
+                    break;
+                    
+                case 'alert_triggered':
+                    this.handleAlertMessage(message);
+                    break;
+                    
+                case 'alert_resolved':
+                    this.handleAlertResolvedMessage(message);
+                    break;
+                    
+                case 'pong':
+                    this.trigger('pong', message.data, message);
+                    break;
+                    
+                case 'connected':
+                    this.log('Server confirmed connection:', message.data);
+                    break;
+                    
+                default:
+                    // Handle any other message types
+                    if (this.eventHandlers[message.type]) {
+                        this.trigger(message.type, message.data, message);
+                    } else {
+                        this.log('Unknown message type:', message.type);
+                    }
+                    break;
             }
 
         } catch (error) {
             this.log('❌ Error parsing message:', error);
             this.handleError(error);
         }
+    }
+
+    /**
+     * Handle alert triggered messages
+     */
+    handleAlertMessage(message) {
+        this.stats.alertsReceived++;
+        
+        const alertData = message.data || message;
+        this.log('Alert triggered:', alertData);
+        
+        // Show visual notification for debugging
+        if (this.options.debug) {
+            const alertName = alertData.alert_name || alertData.name || 'System Alert';
+            const severity = alertData.severity || 'warning';
+            const color = severity === 'critical' ? '#f44336' : '#ffa726';
+            this.showDebugMessage(`${alertName}`, color);
+        }
+        
+        // Trigger alert handlers
+        this.trigger('alert_triggered', alertData, message);
+    }
+
+    /**
+     * Handle alert resolved messages
+     */
+    handleAlertResolvedMessage(message) {
+        const alertData = message.data || message;
+        this.log('Alert resolved:', alertData);
+        
+        // Show visual notification for debugging
+        if (this.options.debug) {
+            const alertName = alertData.alert_name || alertData.name || 'System Alert';
+            this.showDebugMessage(`${alertName} resolved`, '#4ecdc4');
+        }
+        
+        // Trigger alert resolved handlers
+        this.trigger('alert_resolved', alertData, message);
     }
 
     /**
@@ -290,17 +377,40 @@ class WebSocketClient {
     }
 
     /**
-     * Subscribe to specific metrics
+     * Subscribe to specific metrics/alerts
      */
-    subscribe(metricTypes = ['all']) {
-        this.send('subscribe', { types: metricTypes });
+    subscribe(types = ['metrics', 'system_status', 'alert_triggered']) {
+        this.send('subscribe', { types: types });
+        this.log('📡 Subscribed to:', types);
     }
 
     /**
-     * Unsubscribe from metrics
+     * Unsubscribe from metrics/alerts
      */
-    unsubscribe(metricTypes = ['all']) {
-        this.send('unsubscribe', { types: metricTypes });
+    unsubscribe(types = ['all']) {
+        this.send('unsubscribe', { types: types });
+        this.log('📡 Unsubscribed from:', types);
+    }
+
+    /**
+     * Subscribe specifically to alert notifications
+     */
+    subscribeToAlerts() {
+        this.subscribe(['alert_triggered', 'alert_resolved']);
+    }
+
+    /**
+     * Request alert history
+     */
+    requestAlertHistory(limit = 10) {
+        this.send('get_alert_history', { limit: limit });
+    }
+
+    /**
+     * Request alert statistics
+     */
+    requestAlertStats() {
+        this.send('get_alert_stats', {});
     }
 
     /**
@@ -336,7 +446,7 @@ class WebSocketClient {
                 try {
                     handler(...args);
                 } catch (error) {
-                    this.log(`Error in event handler for ${event}:`, error);
+                    this.log(`❌ Error in event handler for ${event}:`, error);
                 }
             });
         }
@@ -346,7 +456,7 @@ class WebSocketClient {
      * Handle errors
      */
     handleError(error) {
-        this.log('Error:', error);
+        this.log('❌ Error:', error);
         this.trigger('error', error);
     }
 
@@ -359,7 +469,8 @@ class WebSocketClient {
             readyState: this.ws ? this.ws.readyState : WebSocket.CLOSED,
             reconnectAttempts: this.reconnectAttempts,
             stats: this.stats,
-            queuedMessages: this.messageQueue.length
+            queuedMessages: this.messageQueue.length,
+            url: this.options.url
         };
     }
 
@@ -374,7 +485,7 @@ class WebSocketClient {
     }
 
     /**
-     * Get connection statistics
+     * Get connection statistics - ENHANCED with alert stats
      */
     getStats() {
         return {
@@ -382,7 +493,8 @@ class WebSocketClient {
             connected: this.isConnected,
             reconnectAttempts: this.reconnectAttempts,
             queuedMessages: this.messageQueue.length,
-            uptime: this.stats.connectionTime ? Date.now() - this.stats.connectionTime.getTime() : 0
+            uptime: this.stats.connectionTime ? Date.now() - this.stats.connectionTime.getTime() : 0,
+            url: this.options.url
         };
     }
 
@@ -391,6 +503,32 @@ class WebSocketClient {
      */
     setDebug(enabled) {
         this.options.debug = enabled;
+        this.log('Debug mode:', enabled ? 'enabled' : 'disabled');
+    }
+
+    /**
+     * Check if connection is healthy
+     */
+    isHealthy() {
+        return this.isConnected && 
+               this.ws && 
+               this.ws.readyState === WebSocket.OPEN &&
+               this.reconnectAttempts < this.options.maxReconnectAttempts;
+    }
+
+    /**
+     * Get readable connection state
+     */
+    getReadableState() {
+        if (!this.ws) return 'Not initialized';
+        
+        switch (this.ws.readyState) {
+            case WebSocket.CONNECTING: return 'Connecting';
+            case WebSocket.OPEN: return 'Connected';
+            case WebSocket.CLOSING: return 'Closing';
+            case WebSocket.CLOSED: return 'Closed';
+            default: return 'Unknown';
+        }
     }
 
     /**
@@ -406,11 +544,22 @@ class WebSocketClient {
      * Cleanup resources
      */
     destroy() {
-        this.log('Destroying WebSocket client');
+        this.log('🧹 Destroying WebSocket client');
         this.disconnect();
         
         // Clear all event handlers
-        this.eventHandlers = {};
+        this.eventHandlers = {
+            connect: [],
+            disconnect: [],
+            reconnect: [],
+            error: [],
+            message: [],
+            metrics: [],
+            system_status: [],
+            alert_triggered: [],
+            alert_resolved: [],
+            pong: []
+        };
         
         // Clear message queue
         this.messageQueue = [];
@@ -421,7 +570,8 @@ class WebSocketClient {
             messagesSent: 0,
             reconnectCount: 0,
             connectionTime: null,
-            lastMessageTime: null
+            lastMessageTime: null,
+            alertsReceived: 0
         };
     }
 }
@@ -449,4 +599,9 @@ function createWebSocketClient(options = {}) {
         debug: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1',
         ...options
     });
+}
+
+// Make utility function globally available
+if (typeof window !== 'undefined') {
+    window.createWebSocketClient = createWebSocketClient;
 }

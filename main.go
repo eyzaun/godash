@@ -27,7 +27,11 @@ type Application struct {
 	config           *config.Config
 	database         *database.Database
 	metricsRepo      repository.MetricsRepository
+	alertRepo        repository.AlertRepository
 	collectorService *services.CollectorService
+	alertService     *services.AlertService
+	emailSender      services.EmailSender
+	webhookSender    services.WebhookSender
 	router           *api.Router
 	server           *http.Server
 }
@@ -38,7 +42,7 @@ func main() {
 
 	// Print welcome message
 	fmt.Printf("%s System Monitor v%s\n", AppName, AppVersion)
-	fmt.Println("Starting GoDash system monitoring server...")
+	fmt.Println("Starting GoDash system monitoring server with alert system...")
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -90,12 +94,57 @@ func initializeApplication() (*Application, error) {
 
 	// Initialize repositories
 	metricsRepo := repository.NewMetricsRepository(db.DB)
+	alertRepo := repository.NewAlertRepository(db.DB)
 
-	// Initialize services
+	// Initialize notification services
+	var emailSender services.EmailSender
+	var webhookSender services.WebhookSender
+
+	// Initialize email sender if configured
+	if cfg.Email != nil && cfg.Email.Enabled {
+		emailSender = services.NewEmailSender(cfg.Email)
+		log.Println("📧 Email service initialized")
+
+		// Validate email configuration
+		if err := emailSender.ValidateConfiguration(); err != nil {
+			log.Printf("⚠️ Email configuration validation failed: %v", err)
+			log.Println("📧 Email notifications will be disabled")
+			emailSender = nil
+		} else {
+			log.Println("✅ Email configuration validated successfully")
+		}
+	} else {
+		log.Println("📧 Email service disabled in configuration")
+	}
+
+	// Initialize webhook sender
+	if cfg.Webhook != nil {
+		webhookSender = services.NewWebhookSender(cfg.Webhook)
+		log.Println("🔗 Webhook service initialized")
+
+		// Validate webhook configuration
+		if err := webhookSender.ValidateConfiguration(); err != nil {
+			log.Printf("⚠️ Webhook configuration validation failed: %v", err)
+			log.Println("🔗 Webhook notifications will be disabled")
+			webhookSender = nil
+		} else {
+			log.Println("✅ Webhook configuration validated successfully")
+		}
+	} else {
+		log.Println("🔗 Webhook service disabled in configuration")
+	}
+
+	// Initialize collector service
 	collectorService := services.NewCollectorService(cfg, metricsRepo)
 
-	// Initialize API router
-	router := api.New(cfg, metricsRepo, collectorService)
+	// Initialize alert service
+	alertService := services.NewAlertService(cfg, alertRepo, emailSender, webhookSender)
+
+	// Link alert service to collector service for real-time alert checking
+	collectorService.SetAlertService(alertService)
+
+	// Initialize API router with all services
+	router := api.New(cfg, metricsRepo, alertRepo, collectorService, alertService, emailSender, webhookSender)
 
 	// Create HTTP server
 	server := &http.Server{
@@ -109,7 +158,11 @@ func initializeApplication() (*Application, error) {
 		config:           cfg,
 		database:         db,
 		metricsRepo:      metricsRepo,
+		alertRepo:        alertRepo,
 		collectorService: collectorService,
+		alertService:     alertService,
+		emailSender:      emailSender,
+		webhookSender:    webhookSender,
 		router:           router,
 		server:           server,
 	}, nil
@@ -123,6 +176,15 @@ func (app *Application) run(ctx context.Context) error {
 		return fmt.Errorf("failed to start collector service: %w", err)
 	}
 
+	// Start alert service
+	log.Println("Starting alert monitoring service...")
+	if err := app.alertService.Start(ctx); err != nil {
+		log.Printf("⚠️ Failed to start alert service: %v", err)
+		log.Println("⚠️ Alert system will be disabled")
+	} else {
+		log.Println("✅ Alert service started successfully")
+	}
+
 	// Start HTTP server in a goroutine
 	serverErrors := make(chan error, 1)
 	go func() {
@@ -130,6 +192,7 @@ func (app *Application) run(ctx context.Context) error {
 		log.Printf("Dashboard available at: http://%s/", app.config.GetServerAddress())
 		log.Printf("API documentation available at: http://%s/api/v1/", app.config.GetServerAddress())
 		log.Printf("Health check available at: http://%s/health", app.config.GetServerAddress())
+		log.Printf("Alert management available at: http://%s/api/v1/alerts", app.config.GetServerAddress())
 
 		if err := app.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			serverErrors <- fmt.Errorf("HTTP server error: %w", err)
@@ -160,6 +223,16 @@ func (app *Application) shutdown() error {
 		shutdownErrors = append(shutdownErrors, fmt.Errorf("HTTP server shutdown error: %w", err))
 	} else {
 		log.Println("HTTP server shutdown complete")
+	}
+
+	// Stop alert service
+	log.Println("Stopping alert service...")
+	if app.alertService != nil {
+		if err := app.alertService.Stop(); err != nil {
+			shutdownErrors = append(shutdownErrors, fmt.Errorf("alert service stop error: %w", err))
+		} else {
+			log.Println("Alert service stopped")
+		}
 	}
 
 	// Stop collector service
