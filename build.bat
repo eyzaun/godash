@@ -45,4 +45,5 @@ echo To run the application:
 echo   build\godash.exe
 echo   build\godash-cli.exe -help
 
-pause
+REM Only pause when not running in non-interactive mode
+if not "%NO_PAUSE%"=="1" pause

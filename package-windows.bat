@@ -4,6 +4,7 @@ REM Package GoDash Windows distribution folder with assets
 set DIST_DIR=build\dist\godash-windows
 
 echo [1/5] Building binaries...
+set NO_PAUSE=1
 call .\build.bat
 if %ERRORLEVEL% neq 0 (
   echo [ERROR] Build failed.
@@ -44,6 +45,13 @@ echo [4/5] Creating run script...
   echo .\godash.exe
 ) > %DIST_DIR%\run.bat
 
-echo [5/5] Done. Distribution is ready at %DIST_DIR%
+echo [5/6] Creating ZIP archive...
+powershell -NoProfile -Command "Compress-Archive -Path '%DIST_DIR%\*' -DestinationPath 'build\dist\godash-windows.zip' -Force" >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+  echo [WARN] Failed to create ZIP archive. You can zip the folder manually.
+)
+
+echo [6/6] Done. Distribution is ready at %DIST_DIR%
+echo Also created: build\dist\godash-windows.zip
 echo Contents:
 dir /b %DIST_DIR%

@@ -71,6 +71,15 @@ func (m *MockMetricsRepository) GetAverageUsage(duration time.Duration) (*models
 	return args.Get(0).(*models.AverageMetrics), args.Error(1)
 }
 
+// Added to satisfy repository.MetricsRepository interface
+func (m *MockMetricsRepository) GetAverageUsageAllRecords() (*models.AverageMetrics, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.AverageMetrics), args.Error(1)
+}
+
 func (m *MockMetricsRepository) GetAverageUsageByHostname(hostname string, duration time.Duration) (*models.AverageMetrics, error) {
 	args := m.Called(hostname, duration)
 	if args.Get(0) == nil {
@@ -411,7 +420,8 @@ func TestGetStats_Success(t *testing.T) {
 
 	mockRepo.On("GetTotalCount").Return(int64(1000), nil)
 	mockRepo.On("GetSystemStatus").Return([]*models.SystemStatus{}, nil)
-	mockRepo.On("GetAverageUsage", time.Hour).Return((*models.AverageMetrics)(nil), fmt.Errorf("no data"))
+	// Updated: handler now calls GetAverageUsageAllRecords instead of GetAverageUsage(duration)
+	mockRepo.On("GetAverageUsageAllRecords").Return((*models.AverageMetrics)(nil), fmt.Errorf("no data"))
 
 	expectedSystemMetrics := createSampleSystemMetrics()
 	mockCollector.On("GetSystemMetrics").Return(expectedSystemMetrics, nil)
