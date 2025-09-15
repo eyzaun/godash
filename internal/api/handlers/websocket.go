@@ -284,11 +284,7 @@ func (h *WebSocketHandler) BroadcastMetrics(metrics *models.SystemMetrics) {
 	// Non-blocking broadcast - always send for real-time updates
 	select {
 	case h.hub.broadcast <- data:
-		log.Printf("📡 Broadcasting detailed metrics: CPU=%.1f%%, Memory=%.1f%%, Disk=%.1f%%, Cores=%d, Freq=%.0f MHz, DiskIO=%.1f/%.1f MB/s, NetSpeed=%.1f/%.1f Mbps",
-			detailedMetrics.CPUUsage, detailedMetrics.MemoryPercent, detailedMetrics.DiskPercent,
-			detailedMetrics.CPUCores, detailedMetrics.CPUFrequency,
-			detailedMetrics.DiskReadSpeed, detailedMetrics.DiskWriteSpeed,
-			detailedMetrics.NetworkUploadSpeed, detailedMetrics.NetworkDownloadSpeed)
+		// Debug log removed - too verbose in production
 	default:
 		log.Println("Broadcast channel full, dropping detailed message")
 	}
@@ -353,16 +349,31 @@ func (h *WebSocketHandler) BroadcastSystemStatus() {
 
 	select {
 	case h.hub.broadcast <- data:
-		log.Printf("📊 Broadcasting system status: CPU=%.1f%%, Memory=%.1f%%, Platform=%s",
-			systemMetrics.CPU.Usage, systemMetrics.Memory.Percent,
-			func() string {
-				if systemInfo != nil {
-					return systemInfo.Platform
-				}
-				return "Unknown"
-			}())
+		// Debug log removed - too verbose in production
 	default:
 		log.Println("Broadcast channel full, dropping system status message")
+	}
+}
+
+// BroadcastAlert broadcasts alert notifications to all connected clients
+func (h *WebSocketHandler) BroadcastAlert(alertData map[string]interface{}) {
+	message := WebSocketMessage{
+		Type:      "alert_triggered",
+		Data:      alertData,
+		Timestamp: time.Now(),
+	}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("Failed to marshal alert for broadcast: %v", err)
+		return
+	}
+
+	select {
+	case h.hub.broadcast <- data:
+		log.Printf("🚨 Alert broadcasted to %d clients", h.GetConnectedClients())
+	default:
+		log.Println("Broadcast channel full, dropping alert message")
 	}
 }
 

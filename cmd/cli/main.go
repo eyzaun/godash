@@ -1,4 +1,4 @@
-package cli
+﻿package main
 
 import (
 	"context"
@@ -15,6 +15,143 @@ import (
 	"github.com/eyzaun/godash/internal/models"
 	"github.com/fatih/color"
 )
+
+func main() {
+	RunCLI()
+}
+
+func RunCLI() {
+	// Parse command line flags
+	var config CLIConfig
+	flag.DurationVar(&config.Interval, "interval", 5*time.Second, "Update interval")
+	flag.BoolVar(&config.OutputJSON, "json", false, "Output in JSON format")
+	flag.BoolVar(&config.ShowProcesses, "processes", false, "Show top processes")
+	flag.BoolVar(&config.Continuous, "continuous", false, "Continuous monitoring mode")
+	flag.IntVar(&config.Count, "count", 0, "Number of updates (0 for infinite)")
+	flag.BoolVar(&config.NoColor, "no-color", false, "Disable colored output")
+
+	help := flag.Bool("help", false, "Show help message")
+	version := flag.Bool("version", false, "Show version information")
+
+	flag.Parse()
+
+	// Handle help and version
+	if *help {
+		fmt.Println("GoDash System Monitor - CLI Tool")
+		fmt.Println()
+		fmt.Println("Usage:")
+		flag.PrintDefaults()
+		return
+	}
+
+	if *version {
+		fmt.Println("GoDash System Monitor v1.0.0")
+		return
+	}
+
+	// Disable colors if requested or if not a terminal
+	if config.NoColor {
+		color.NoColor = true
+	}
+
+	// Create system collector
+	systemCollector := collector.NewSystemCollector(nil)
+
+	// Handle graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		if !config.NoColor {
+			fmt.Println(color.YellowString("\nShutting down gracefully..."))
+		} else {
+			fmt.Println("\nShutting down gracefully...")
+		}
+		cancel()
+	}()
+
+	// Get system info once
+	systemInfo, err := systemCollector.GetSystemInfo()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting system info: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Single run mode
+	if !config.Continuous {
+		snapshot, err := systemCollector.GetMetricsSnapshot()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error collecting metrics: %v\n", err)
+			os.Exit(1)
+		}
+
+		if config.OutputJSON {
+			if err := printJSON(snapshot); err != nil {
+				fmt.Fprintf(os.Stderr, "Error printing JSON: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			printHeader(config.NoColor)
+			printSystemInfo(systemInfo, config.NoColor)
+			printMetrics(&snapshot.SystemMetrics, config.NoColor)
+
+			if config.ShowProcesses {
+				printTopProcesses(snapshot.TopProcesses, config.NoColor)
+			}
+		}
+		return
+	}
+
+	// Continuous monitoring mode
+	if !config.OutputJSON {
+		printHeader(config.NoColor)
+		printSystemInfo(systemInfo, config.NoColor)
+	}
+
+	metricsChan := systemCollector.StartCollection(ctx, config.Interval)
+	updateCount := 0
+
+	for {
+		select {
+		case metrics, ok := <-metricsChan:
+			if !ok {
+				return
+			}
+
+			if config.OutputJSON {
+				if err := printJSON(metrics); err != nil {
+					fmt.Fprintf(os.Stderr, "Error printing JSON: %v\n", err)
+				}
+			} else {
+				// Clear screen for continuous updates (except first update)
+				if updateCount > 0 {
+					clearScreen()
+					printHeader(config.NoColor)
+					printSystemInfo(systemInfo, config.NoColor)
+				}
+
+				printMetrics(metrics, config.NoColor)
+
+				if config.ShowProcesses {
+					topProcesses, err := systemCollector.GetTopProcesses(10, "cpu")
+					if err == nil {
+						printTopProcesses(topProcesses, config.NoColor)
+					}
+				}
+			}
+
+			updateCount++
+			if config.Count > 0 && updateCount >= config.Count {
+				return
+			}
+
+		case <-ctx.Done():
+			return
+		}
+	}
+}
 
 // CLIConfig holds CLI configuration
 type CLIConfig struct {
@@ -308,137 +445,4 @@ func printJSON(data interface{}) error {
 // clearScreen clears the terminal screen
 func clearScreen() {
 	fmt.Print("\033[2J\033[H")
-}
-
-func RunCLI() {
-	// Parse command line flags
-	var config CLIConfig
-	flag.DurationVar(&config.Interval, "interval", 5*time.Second, "Update interval")
-	flag.BoolVar(&config.OutputJSON, "json", false, "Output in JSON format")
-	flag.BoolVar(&config.ShowProcesses, "processes", false, "Show top processes")
-	flag.BoolVar(&config.Continuous, "continuous", false, "Continuous monitoring mode")
-	flag.IntVar(&config.Count, "count", 0, "Number of updates (0 for infinite)")
-	flag.BoolVar(&config.NoColor, "no-color", false, "Disable colored output")
-
-	help := flag.Bool("help", false, "Show help message")
-	version := flag.Bool("version", false, "Show version information")
-
-	flag.Parse()
-
-	// Handle help and version
-	if *help {
-		fmt.Println("GoDash System Monitor - CLI Tool")
-		fmt.Println()
-		fmt.Println("Usage:")
-		flag.PrintDefaults()
-		return
-	}
-
-	if *version {
-		fmt.Println("GoDash System Monitor v1.0.0")
-		return
-	}
-
-	// Disable colors if requested or if not a terminal
-	if config.NoColor {
-		color.NoColor = true
-	}
-
-	// Create system collector
-	systemCollector := collector.NewSystemCollector(nil)
-
-	// Handle graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		<-sigChan
-		if !config.NoColor {
-			fmt.Println(color.YellowString("\nShutting down gracefully..."))
-		} else {
-			fmt.Println("\nShutting down gracefully...")
-		}
-		cancel()
-	}()
-
-	// Get system info once
-	systemInfo, err := systemCollector.GetSystemInfo()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting system info: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Single run mode
-	if !config.Continuous {
-		snapshot, err := systemCollector.GetMetricsSnapshot()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error collecting metrics: %v\n", err)
-			os.Exit(1)
-		}
-
-		if config.OutputJSON {
-			if err := printJSON(snapshot); err != nil {
-				fmt.Fprintf(os.Stderr, "Error printing JSON: %v\n", err)
-				os.Exit(1)
-			}
-		} else {
-			printHeader(config.NoColor)
-			printSystemInfo(systemInfo, config.NoColor)
-			printMetrics(&snapshot.SystemMetrics, config.NoColor)
-
-			if config.ShowProcesses {
-				printTopProcesses(snapshot.TopProcesses, config.NoColor)
-			}
-		}
-		return
-	}
-
-	// Continuous monitoring mode
-	if !config.OutputJSON {
-		printHeader(config.NoColor)
-		printSystemInfo(systemInfo, config.NoColor)
-	}
-
-	metricsChan := systemCollector.StartCollection(ctx, config.Interval)
-	updateCount := 0
-
-	for {
-		select {
-		case metrics, ok := <-metricsChan:
-			if !ok {
-				return
-			}
-
-			if config.OutputJSON {
-				if err := printJSON(metrics); err != nil {
-					fmt.Fprintf(os.Stderr, "Error printing JSON: %v\n", err)
-				}
-			} else {
-				// Clear screen for continuous updates (except first update)
-				if updateCount > 0 {
-					clearScreen()
-					printHeader(config.NoColor)
-					printSystemInfo(systemInfo, config.NoColor)
-				}
-
-				printMetrics(metrics, config.NoColor)
-
-				if config.ShowProcesses {
-					topProcesses, err := systemCollector.GetTopProcesses(10, "cpu")
-					if err == nil {
-						printTopProcesses(topProcesses, config.NoColor)
-					}
-				}
-			}
-
-			updateCount++
-			if config.Count > 0 && updateCount >= config.Count {
-				return
-			}
-
-		case <-ctx.Done():
-			return
-		}
-	}
 }

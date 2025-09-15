@@ -15,10 +15,11 @@ import (
 
 // AlertService manages alert checking and notifications
 type AlertService struct {
-	alertRepo     repository.AlertRepository
-	emailSender   EmailSender
-	webhookSender WebhookSender
-	config        *config.AlertConfig
+	alertRepo        repository.AlertRepository
+	emailSender      EmailSender
+	webhookSender    WebhookSender
+	websocketHandler interface{} // WebSocket handler for broadcasting alerts
+	config           *config.AlertConfig
 
 	// Alert state management
 	lastAlerts     map[string]time.Time // Key: alert_id:hostname, Value: last triggered time
@@ -152,59 +153,77 @@ func (as *AlertService) CheckMetrics(metrics *models.SystemMetrics) {
 	// Check each alert
 	for _, alert := range alerts {
 		if err := as.checkSingleAlert(alert, metrics); err != nil {
-			log.Printf("❌ Error checking alert %s: %v", alert.Name, err)
+			// Debug log removed - too verbose in production
 		}
 	}
 }
 
-// checkSingleAlert checks a single alert against metrics
+// checkSingleAlert processes a single alert against current metrics
 func (as *AlertService) checkSingleAlert(alert *models.Alert, metrics *models.SystemMetrics) error {
-	// Get metric value based on alert type
-	metricValue, err := as.getMetricValue(alert.MetricType, metrics)
-	if err != nil {
-		return fmt.Errorf("failed to get metric value: %w", err)
+	as.mutex.Lock()
+	as.checkedCount++
+	as.mutex.Unlock()
+
+	// Get current metric value based on alert type
+	var currentValue float64
+	var hostname string
+
+	switch alert.MetricType {
+	case "cpu":
+		currentValue = metrics.CPU.Usage
+		hostname = metrics.Hostname
+	case "memory":
+		currentValue = metrics.Memory.Percent
+		hostname = metrics.Hostname
+	case "disk":
+		currentValue = metrics.Disk.Percent
+		hostname = metrics.Hostname
+	case "load_avg_1":
+		if len(metrics.CPU.LoadAvg) > 0 {
+			currentValue = metrics.CPU.LoadAvg[0]
+		}
+		hostname = metrics.Hostname
+	case "load_avg_5":
+		if len(metrics.CPU.LoadAvg) > 1 {
+			currentValue = metrics.CPU.LoadAvg[1]
+		}
+		hostname = metrics.Hostname
+	case "load_avg_15":
+		if len(metrics.CPU.LoadAvg) > 2 {
+			currentValue = metrics.CPU.LoadAvg[2]
+		}
+		hostname = metrics.Hostname
+	default:
+		log.Printf("Unknown metric type: %s", alert.MetricType)
+		return nil
 	}
 
-	// Check if alert condition is met
-	isTriggered, err := as.evaluateCondition(alert.Condition, metricValue, alert.Threshold)
+	alertKey := fmt.Sprintf("%d_%s", alert.ID, hostname)
+
+	// Evaluate condition
+	conditionMet, err := as.evaluateCondition(alert.Condition, currentValue, alert.Threshold)
 	if err != nil {
-		return fmt.Errorf("failed to evaluate alert condition: %w", err)
+		log.Printf("❌ Error evaluating condition for alert %d: %v", alert.ID, err)
+		return err
 	}
 
-	alertKey := fmt.Sprintf("%d:%s", alert.ID, metrics.Hostname)
+	log.Printf("🔍 Alert %d (%s): %s %s %.2f (current: %.2f) - Condition met: %v",
+		alert.ID, alert.Name, alert.MetricType, alert.Condition, alert.Threshold, currentValue, conditionMet)
 
-	if isTriggered {
-		// Check if alert should be triggered (duration + cooldown)
+	if conditionMet {
+		// Check if alert should trigger (duration/cooldown logic)
 		if as.shouldTriggerAlert(alert, alertKey) {
-			// Update triggered count
-			if err := as.alertRepo.UpdateAlert(&models.Alert{
-				BaseModel:       alert.BaseModel,
-				Name:            alert.Name,
-				MetricType:      alert.MetricType,
-				Condition:       alert.Condition,
-				Threshold:       alert.Threshold,
-				Duration:        alert.Duration,
-				Severity:        alert.Severity,
-				IsActive:        alert.IsActive,
-				Description:     alert.Description,
-				EmailEnabled:    alert.EmailEnabled,
-				EmailRecipients: alert.EmailRecipients,
-				WebhookEnabled:  alert.WebhookEnabled,
-				WebhookURL:      alert.WebhookURL,
-				TriggeredCount:  alert.TriggeredCount + 1,
-				LastTriggered:   time.Now(),
-			}); err != nil {
-				log.Printf("❌ Failed to update alert triggered count: %v", err)
-			}
+			log.Printf("🚨 Alert %d TRIGGERING: %s on %s (%.2f %s %.2f)",
+				alert.ID, alert.Name, hostname, currentValue, alert.Condition, alert.Threshold)
 
 			// Create alert history entry
 			history := &models.AlertHistory{
 				AlertID:     alert.ID,
 				Hostname:    metrics.Hostname,
-				MetricValue: metricValue,
+				MetricValue: currentValue,
 				Threshold:   alert.Threshold,
 				Severity:    alert.Severity,
-				Message:     as.generateAlertMessage(alert, metricValue, metrics.Hostname),
+				Message:     as.generateAlertMessage(alert, currentValue, metrics.Hostname),
 				Resolved:    false,
 			}
 
@@ -212,11 +231,37 @@ func (as *AlertService) checkSingleAlert(alert *models.Alert, metrics *models.Sy
 				log.Printf("❌ Failed to create alert history: %v", err)
 			} else {
 				log.Printf("🚨 Alert triggered: %s on %s (%.2f %s threshold)",
-					alert.Name, metrics.Hostname, metricValue, alert.Condition)
+					alert.Name, metrics.Hostname, currentValue, alert.Condition)
 
 				as.mutex.Lock()
 				as.triggeredCount++
 				as.mutex.Unlock()
+
+				// Update alert trigger statistics
+				if err := as.alertRepo.UpdateAlertTriggerStats(alert.ID); err != nil {
+					log.Printf("❌ Failed to update alert trigger stats: %v", err)
+				}
+
+				// Broadcast alert to WebSocket clients
+				if as.websocketHandler != nil {
+					alertData := map[string]interface{}{
+						"alert_id":      alert.ID,
+						"alert_name":    alert.Name,
+						"hostname":      metrics.Hostname,
+						"metric_type":   alert.MetricType,
+						"condition":     alert.Condition,
+						"threshold":     alert.Threshold,
+						"current_value": currentValue,
+						"severity":      alert.Severity,
+						"message":       history.Message,
+						"timestamp":     time.Now(),
+					}
+
+					// Try to call BroadcastAlert method if it exists
+					if broadcaster, ok := as.websocketHandler.(interface{ BroadcastAlert(map[string]interface{}) }); ok {
+						broadcaster.BroadcastAlert(alertData)
+					}
+				}
 
 				// Send notifications
 				go as.sendNotifications(alert, history)
@@ -228,9 +273,13 @@ func (as *AlertService) checkSingleAlert(alert *models.Alert, metrics *models.Sy
 			as.mutex.Unlock()
 		} else {
 			// Alert condition met but not triggering due to duration/cooldown
+			log.Printf("⏳ Alert %d condition met but not triggering (duration: %ds, cooldown check)",
+				alert.ID, alert.Duration)
+
 			as.mutex.Lock()
 			if _, exists := as.alertDurations[alertKey]; !exists {
 				as.alertDurations[alertKey] = time.Now()
+				log.Printf("⏰ Started duration tracking for alert %d", alert.ID)
 			}
 			as.mutex.Unlock()
 		}
@@ -252,11 +301,24 @@ func (as *AlertService) shouldTriggerAlert(alert *models.Alert, alertKey string)
 	as.mutex.RLock()
 	defer as.mutex.RUnlock()
 
+	log.Printf("🔍 Checking alert %d (duration: %d) for key: %s", alert.ID, alert.Duration, alertKey)
+
+	// For immediate alerts (duration 0), skip cooldown check and trigger immediately
+	if alert.Duration == 0 {
+		log.Printf("✅ Alert %d has duration 0, triggering immediately", alert.ID)
+		return true
+	}
+
+	log.Printf("⏳ Alert %d has duration > 0, checking cooldown", alert.ID)
 	// Check cooldown period
 	if lastTriggered, exists := as.lastAlerts[alertKey]; exists {
 		if time.Since(lastTriggered) < as.config.CooldownPeriod {
+			log.Printf("❌ Alert %d in cooldown", alert.ID)
 			return false // Still in cooldown
 		}
+		log.Printf("✅ Alert %d cooldown passed", alert.ID)
+	} else {
+		log.Printf("ℹ️ Alert %d no previous trigger", alert.ID)
 	}
 
 	// Check duration requirement
@@ -264,43 +326,18 @@ func (as *AlertService) shouldTriggerAlert(alert *models.Alert, alertKey string)
 		if firstTriggered, exists := as.alertDurations[alertKey]; exists {
 			requiredDuration := time.Duration(alert.Duration) * time.Second
 			if time.Since(firstTriggered) < requiredDuration {
+				log.Printf("❌ Alert %d duration not met", alert.ID)
 				return false // Haven't been triggered long enough
 			}
+			log.Printf("✅ Alert %d duration met", alert.ID)
 		} else {
+			log.Printf("❌ Alert %d first time, starting duration tracking", alert.ID)
 			return false // First time seeing this condition
 		}
 	}
 
+	log.Printf("✅ Alert %d can trigger", alert.ID)
 	return true
-}
-
-// getMetricValue extracts the appropriate metric value
-func (as *AlertService) getMetricValue(metricType string, metrics *models.SystemMetrics) (float64, error) {
-	switch strings.ToLower(metricType) {
-	case "cpu":
-		return metrics.CPU.Usage, nil
-	case "memory":
-		return metrics.Memory.Percent, nil
-	case "disk":
-		return metrics.Disk.Percent, nil
-	case "load_avg_1":
-		if len(metrics.CPU.LoadAvg) >= 1 {
-			return metrics.CPU.LoadAvg[0], nil
-		}
-		return 0, fmt.Errorf("load average not available")
-	case "load_avg_5":
-		if len(metrics.CPU.LoadAvg) >= 2 {
-			return metrics.CPU.LoadAvg[1], nil
-		}
-		return 0, fmt.Errorf("load average not available")
-	case "load_avg_15":
-		if len(metrics.CPU.LoadAvg) >= 3 {
-			return metrics.CPU.LoadAvg[2], nil
-		}
-		return 0, fmt.Errorf("load average not available")
-	default:
-		return 0, fmt.Errorf("unsupported metric type: %s", metricType)
-	}
 }
 
 // evaluateCondition evaluates alert condition
@@ -332,7 +369,7 @@ func (as *AlertService) generateAlertMessage(alert *models.Alert, value float64,
 	}
 
 	return fmt.Sprintf("%s %s %.2f%s (threshold: %.2f%s) on %s",
-		strings.Title(alert.MetricType),
+		strings.Title(strings.ToLower(alert.MetricType)),
 		alert.Condition,
 		value, unit,
 		alert.Threshold, unit,
@@ -473,4 +510,9 @@ func (as *AlertService) GetStats() map[string]interface{} {
 		"active_durations": len(as.alertDurations),
 		"cooldown_alerts":  len(as.lastAlerts),
 	}
+}
+
+// SetWebSocketHandler sets the WebSocket handler for broadcasting alerts
+func (as *AlertService) SetWebSocketHandler(handler interface{}) {
+	as.websocketHandler = handler
 }

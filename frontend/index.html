@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoDash System Monitor</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+
+    <style>
+        /* Dark theme for desktop app */
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* Remove any external borders for embedded view */
+        .container {
+            max-width: none;
+            margin: 0;
+            padding: 1rem;
+        }
+
+        /* Ensure full height usage */
+        html, body {
+            height: 100%;
+        }
+
+        /* Wails specific styles */
+        #app {
+            height: 100vh;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Dashboard Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1 class="header-title">
+                        <span class="icon">📊</span>
+                        GoDash System Monitor
+                        <span class="version">v1.0.0</span>
+                    </h1>
+                </div>
+                <div class="header-right">
+                    <div class="connection-status" id="connectionStatus">
+                        <div class="status-indicator"></div>
+                        <span class="status-text">Connecting...</span>
+                    </div>
+                    <div class="last-update" id="lastUpdate">Never</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Content -->
+        <main class="main-content">
+            <!-- Quick Stats Cards -->
+            <section class="stats-section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">🖥️</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="totalHosts">0</div>
+                            <div class="stat-label">Total Hosts</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">⚡</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="activeAlerts">0</div>
+                            <div class="stat-label">Active Alerts</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📈</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="avgCpu">0%</div>
+                            <div class="stat-label">Average CPU</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">💾</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="avgMemory">0%</div>
+                            <div class="stat-label">Average Memory</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Main Metrics Grid -->
+            <section class="metrics-section">
+                <!-- CPU Card -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <h3>🔥 CPU Usage</h3>
+                        <div class="metric-value" id="cpuValue">0%</div>
+                    </div>
+                    <div class="metric-details">
+                        <div class="detail-item">
+                            <span>Cores:</span>
+                            <span id="cpuCores">0</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Frequency:</span>
+                            <span id="cpuFrequency">0 MHz</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Temperature:</span>
+                            <span id="cpuTemperature">0°C</span>
+                        </div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="cpuProgress"></div>
+                    </div>
+                </div>
+
+                <!-- Memory Card -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <h3>💾 Memory Usage</h3>
+                        <div class="metric-value" id="memoryValue">0%</div>
+                    </div>
+                    <div class="metric-details">
+                        <div class="detail-item">
+                            <span>Used:</span>
+                            <span id="memoryUsed">0 GB</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Total:</span>
+                            <span id="memoryTotal">0 GB</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Available:</span>
+                            <span id="memoryAvailable">0 GB</span>
+                        </div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="memoryProgress"></div>
+                    </div>
+                </div>
+
+                <!-- Disk Card -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <h3>💿 Disk Usage</h3>
+                        <div class="metric-value" id="diskValue">0%</div>
+                    </div>
+                    <div class="metric-details">
+                        <div class="detail-item">
+                            <span>Used:</span>
+                            <span id="diskUsed">0 GB</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Total:</span>
+                            <span id="diskTotal">0 GB</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Free:</span>
+                            <span id="diskFree">0 GB</span>
+                        </div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="diskProgress"></div>
+                    </div>
+                </div>
+
+                <!-- Network Card -->
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <h3>🌐 Network</h3>
+                        <div class="metric-value" id="networkValue">Active</div>
+                    </div>
+                    <div class="metric-details">
+                        <div class="detail-item">
+                            <span>Upload:</span>
+                            <span id="networkUpload">0 MB/s</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Download:</span>
+                            <span id="networkDownload">0 MB/s</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Total Sent:</span>
+                            <span id="networkSent">0 GB</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Charts Section -->
+            <section class="charts-section">
+                <div class="chart-container">
+                    <canvas id="cpuChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="memoryChart"></canvas>
+                </div>
+            </section>
+
+            <!-- System Information Section -->
+            <section class="info-section">
+                <div class="info-grid">
+                    <!-- System Information Card -->
+                    <div class="info-card">
+                        <h3>System Information</h3>
+                        <div class="details-list">
+                            <div class="detail-row">
+                                <span>Hostname</span>
+                                <span id="systemHostname">Unknown</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Platform</span>
+                                <span id="systemPlatform">Unknown</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Architecture</span>
+                                <span id="systemArch">Unknown</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Uptime</span>
+                                <span id="systemUptime">0 seconds</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Total Processes</span>
+                                <span id="processCount">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Status Card -->
+                    <div class="info-card">
+                        <h3>System Status</h3>
+                        <div class="status-list" id="systemStatus">
+                            <div class="status-item">
+                                <div class="status-item-left">
+                                    <div class="status-badge online"></div>
+                                    <div class="status-content">
+                                        <div class="status-hostname" id="statusHostname">localhost</div>
+                                        <div class="status-metrics" id="statusMetrics">CPU: 0% | Memory: 0% | Disk: 0%</div>
+                                        <div class="status-time" id="statusTime">Never</div>
+                                    </div>
+                                </div>
+                                <div class="status-badge-text online">ONLINE</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Processes Card -->
+                    <div class="info-card">
+                        <h3>Top Processes</h3>
+                        <div class="processes-list" id="topProcesses">
+                            <div class="process-item">
+                                <div class="process-info">
+                                    <span class="process-name">Loading...</span>
+                                    <span class="process-cpu">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Connection Status Card -->
+                    <div class="info-card">
+                        <h3>Desktop App Status</h3>
+                        <div class="details-list">
+                            <div class="detail-row">
+                                <span>Backend</span>
+                                <span id="backendStatus">Connected</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Data Collection</span>
+                                <span id="collectionStatus">Active</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Last Update</span>
+                                <span id="lastUpdateTime">Never</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/js/chart-manager.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+
+    <!-- Desktop App Specific Script -->
+    <script>
+        // Override WebSocket connection for desktop app
+        class DesktopDashboard extends Dashboard {
+            constructor() {
+                super();
+                this.isDesktopApp = true;
+            }
+
+            // Override WebSocket methods for desktop
+            initializeWebSocket() {
+                // Instead of WebSocket, we'll use periodic polling
+                this.startPolling();
+            }
+
+            startPolling() {
+                // Poll data every 2 seconds
+                setInterval(() => {
+                    this.loadCurrentMetrics();
+                }, 2000);
+
+                // Initial load
+                this.loadCurrentMetrics();
+            }
+
+            async loadCurrentMetrics() {
+                try {
+                    // Use Wails backend methods if available
+                    if (window.go && window.go.main) {
+                        console.log('🔍 Calling Go backend methods...');
+                        const result = await window.go.main.GetSystemInfo();
+                        console.log('✅ Got result from Go:', result);
+
+                        if (result.success) {
+                            this.updateMetricsDisplay(result.data);
+                            this.chartManager?.updateMetrics(result.data);
+
+                            // Update connection status
+                            this.updateConnectionStatus('online', 'Backend Connected');
+                        } else {
+                            console.error('❌ Backend returned error:', result.error);
+                            this.updateConnectionStatus('error', result.error);
+                        }
+                    } else {
+                        console.warn('⚠️ Wails Go methods not available, using mock data');
+                        // Fallback: generate mock data for development
+                        this.generateMockData();
+                    }
+                } catch (error) {
+                    console.error('❌ Error loading metrics:', error);
+                    this.updateConnectionStatus('error', 'Backend Error');
+                    this.generateMockData();
+                }
+            }
+
+            generateMockData() {
+                const mockData = {
+                    cpu_usage: Math.random() * 100,
+                    memory_percent: Math.random() * 100,
+                    disk_percent: Math.random() * 100,
+                    hostname: 'desktop-app',
+                    cpu_cores: 8,
+                    cpu_frequency: 3200,
+                    memory_total: 16 * 1024 * 1024 * 1024,
+                    memory_used: Math.random() * 16 * 1024 * 1024 * 1024,
+                    disk_total: 500 * 1024 * 1024 * 1024,
+                    disk_used: Math.random() * 500 * 1024 * 1024 * 1024,
+                    network_upload_speed_mbps: Math.random() * 10,
+                    network_download_speed_mbps: Math.random() * 100,
+                    top_processes: [
+                        '@{pid=1234; name=chrome.exe; cpu_percent=15.2; memory_bytes=268435456; status=running}',
+                        '@{pid=5678; name=code.exe; cpu_percent=8.7; memory_bytes=134217728; status=running}',
+                        '@{pid=9012; name=firefox.exe; cpu_percent=6.3; memory_bytes=201326592; status=running}'
+                    ]
+                };
+
+                this.updateMetricsDisplay(mockData);
+                this.chartManager?.updateMetrics(mockData);
+                this.updateConnectionStatus('warning', 'Using Mock Data');
+            }
+
+            updateConnectionStatus(status, message) {
+                const statusElement = document.getElementById('connectionStatus');
+                const statusIndicator = statusElement?.querySelector('.status-indicator');
+                const statusText = statusElement?.querySelector('.status-text');
+
+                if (statusIndicator && statusText) {
+                    statusIndicator.className = `status-indicator ${status}`;
+                    statusText.textContent = message;
+                }
+
+                // Update backend status as well
+                const backendStatus = document.getElementById('backendStatus');
+                if (backendStatus) {
+                    backendStatus.textContent = message;
+                }
+            }
+        }
+
+        // Initialize desktop dashboard when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🖥️ GoDash Desktop App - Initializing Dashboard');
+            window.dashboard = new DesktopDashboard();
+        });
+    </script>
+</body>
+</html>

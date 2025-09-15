@@ -166,7 +166,9 @@ class ChartManager {
             if (this.charts[type]) {
                 this.charts[type].destroy();
             }
+            
             const ctx = canvas.getContext('2d');
+            
             this.charts[type] = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -175,7 +177,7 @@ class ChartManager {
                         data: this.getInitialDonutData(type),
                         backgroundColor: this.getDonutColors(type, color),
                         borderWidth: 0,
-                        cutout: '90%'
+                        cutout: '70%'
                     }]
                 },
                 options: {
@@ -191,6 +193,7 @@ class ChartManager {
                     }
                 }
             });
+            
             console.log(`✅ ${type} chart initialized successfully`);
         } catch (error) {
             console.error(`❌ Error initializing ${type} chart:`, error);
@@ -316,7 +319,7 @@ class ChartManager {
                             beginAtZero: true,
                             grid: { 
                                 color: this.colors.grid,
-                                drawBorder: false 
+                                drawBorder: false
                             },
                             ticks: {
                                 color: this.colors.textSecondary,
@@ -379,6 +382,16 @@ class ChartManager {
                         data: [],
                         borderColor: this.colors.memory,
                         backgroundColor: 'rgba(78, 205, 196, 0.1)',
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointHoverRadius: 4,
+                        borderWidth: 2
+                    }, {
+                        label: 'Disk Usage %',
+                        data: [],
+                        borderColor: this.colors.disk,
+                        backgroundColor: 'rgba(255, 167, 38, 0.1)',
                         fill: false,
                         tension: 0.4,
                         pointRadius: 2,
@@ -616,11 +629,13 @@ class ChartManager {
         const timestamp = new Date().toLocaleTimeString();
         const cpuUsage = Math.min(100, Math.max(0, metrics.cpu_usage || 0));
         const memoryUsage = Math.min(100, Math.max(0, metrics.memory_percent || 0));
+        const diskUsage = Math.min(100, Math.max(0, metrics.disk_percent || 0));
 
         // Add new data point
         this.charts.trends.data.labels.push(timestamp);
         this.charts.trends.data.datasets[0].data.push(cpuUsage);
         this.charts.trends.data.datasets[1].data.push(memoryUsage);
+        this.charts.trends.data.datasets[2].data.push(diskUsage);
 
         // Keep only last N data points for performance
         const maxPoints = this.options.maxDataPoints;
@@ -628,6 +643,7 @@ class ChartManager {
             this.charts.trends.data.labels.shift();
             this.charts.trends.data.datasets[0].data.shift();
             this.charts.trends.data.datasets[1].data.shift();
+            this.charts.trends.data.datasets[2].data.shift();
         }
 
         this.charts.trends.update('active');
@@ -644,18 +660,21 @@ class ChartManager {
             this.charts.trends.data.labels = [];
             this.charts.trends.data.datasets[0].data = [];
             this.charts.trends.data.datasets[1].data = [];
+            this.charts.trends.data.datasets[2].data = [];
 
             if (historicalData.labels && historicalData.datasets) {
                 this.charts.trends.data.labels = [...historicalData.labels];
-                if (historicalData.datasets.length >= 2) {
+                if (historicalData.datasets.length >= 3) {
                     this.charts.trends.data.datasets[0].data = [...historicalData.datasets[0].data];
                     this.charts.trends.data.datasets[1].data = [...historicalData.datasets[1].data];
+                    this.charts.trends.data.datasets[2].data = [...historicalData.datasets[2].data];
                 }
             } else if (Array.isArray(historicalData)) {
                 historicalData.forEach(point => {
                     this.charts.trends.data.labels.push(point.timestamp || new Date(point.time).toLocaleTimeString());
                     this.charts.trends.data.datasets[0].data.push(point.cpu_usage || 0);
                     this.charts.trends.data.datasets[1].data.push(point.memory_percent || 0);
+                    this.charts.trends.data.datasets[2].data.push(point.disk_percent || 0);
                 });
             }
 
@@ -756,7 +775,7 @@ class ChartManager {
                             'rgba(255, 255, 255, 0.1)'
                         ],
                         borderWidth: 0,
-                        cutout: '90%'
+                        cutout: '70%'
                     }]
                 },
                 options: {

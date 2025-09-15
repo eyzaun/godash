@@ -18,6 +18,7 @@ type AlertRepository interface {
 	GetActiveAlerts() ([]*models.Alert, error)
 	GetAlertsByMetricType(metricType string) ([]*models.Alert, error)
 	UpdateAlert(alert *models.Alert) error
+	UpdateAlertTriggerStats(alertID uint) error
 	DeleteAlert(id uint) error
 
 	// Alert history operations
@@ -106,13 +107,36 @@ func (r *alertRepository) UpdateAlert(alert *models.Alert) error {
 
 // DeleteAlert deletes an alert configuration
 func (r *alertRepository) DeleteAlert(id uint) error {
-	result := r.db.Delete(&models.Alert{}, id)
+	// Start a transaction to ensure atomicity
+	tx := r.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// First, delete all related alert history records
+	if err := tx.Where("alert_id = ?", id).Delete(&models.AlertHistory{}).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to delete alert history: %w", err)
+	}
+
+	// Then delete the alert itself
+	result := tx.Delete(&models.Alert{}, id)
 	if result.Error != nil {
+		tx.Rollback()
 		return fmt.Errorf("failed to delete alert: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
+		tx.Rollback()
 		return fmt.Errorf("alert not found")
 	}
+
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return nil
 }
 
@@ -263,4 +287,24 @@ func (r *alertRepository) GetTriggeredAlertsCount(since time.Time) (int64, error
 		return 0, fmt.Errorf("failed to get triggered alerts count: %w", err)
 	}
 	return count, nil
+}
+
+// UpdateAlertTriggerStats updates the trigger count and last triggered time for an alert
+func (r *alertRepository) UpdateAlertTriggerStats(alertID uint) error {
+	// First get the current alert
+	var alert models.Alert
+	if err := r.db.First(&alert, alertID).Error; err != nil {
+		return fmt.Errorf("failed to get alert: %w", err)
+	}
+
+	// Update the fields
+	alert.TriggeredCount++
+	alert.LastTriggered = time.Now()
+
+	// Save the updated alert
+	if err := r.db.Save(&alert).Error; err != nil {
+		return fmt.Errorf("failed to update alert trigger stats: %w", err)
+	}
+
+	return nil
 }

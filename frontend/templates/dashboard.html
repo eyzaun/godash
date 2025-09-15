@@ -9,8 +9,8 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     
     <!-- External Dependencies -->
-    <script src="/static/js/chart.umd.js"></script>
-    <script src="/static/js/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     
     <!-- Main CSS -->
     <link rel="stylesheet" href="/static/css/dashboard.css">
@@ -311,6 +311,16 @@
         <!-- Historical Charts Section -->
         <div class="trends-section">
             <h2>System Performance History</h2>
+            <div class="section-header">
+                <div class="chart-controls">
+                    <select id="timeRange" onchange="updateTimeRange()">
+                        <option value="1h">Last Hour</option>
+                        <option value="6h">Last 6 Hours</option>
+                        <option value="24h" selected>Last 24 Hours</option>
+                        <option value="7d">Last 7 Days</option>
+                    </select>
+                </div>
+            </div>
             <div class="trends-chart-container">
                 <canvas id="trends-chart"></canvas>
             </div>
@@ -418,6 +428,19 @@
                     </div>
                 </div>
 
+                <!-- Top Processes Card -->
+                <div class="info-card">
+                    <h3>Top Processes</h3>
+                    <div class="processes-list" id="topProcesses">
+                        <div class="process-item">
+                            <div class="process-info">
+                                <span class="process-name">Loading...</span>
+                                <span class="process-cpu">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Connection Status Card -->
                 <div class="info-card">
                     <h3>Connection Status</h3>
@@ -452,7 +475,7 @@
                 <!-- Basic Alert Info -->
                 <div class="form-group">
                     <label for="alertName">Alert Name *</label>
-                    <input type="text" id="alertName" name="name" required placeholder="High CPU Usage" autocomplete="off">
+                    <input type="text" id="alertName" name="name" required placeholder="High CPU Usage">
                 </div>
                 
                 <div class="form-row">
@@ -482,7 +505,7 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="threshold">Threshold *</label>
-                        <input type="number" id="threshold" name="threshold" required step="0.1" placeholder="80" min="0" max="100" autocomplete="off">
+                        <input type="number" id="threshold" name="threshold" required step="0.1" placeholder="80" min="0" max="100">
                     </div>
                     
                     <div class="form-group">
@@ -497,13 +520,13 @@
 
                 <div class="form-group">
                     <label for="duration">Duration (seconds)</label>
-                    <input type="number" id="duration" name="duration" placeholder="300" min="0" autocomplete="off">
+                    <input type="number" id="duration" name="duration" placeholder="300" min="0">
                     <small>Alert will trigger only if condition persists for this duration (0 = immediate)</small>
                 </div>
 
                 <div class="form-group">
                     <label for="description">Description</label>
-                    <textarea id="description" name="description" rows="3" placeholder="Optional description" autocomplete="off"></textarea>
+                    <textarea id="description" name="description" rows="3" placeholder="Optional description"></textarea>
                 </div>
 
                 <!-- Email Notifications -->
@@ -517,7 +540,7 @@
                     </div>
                     <div class="form-group">
                         <label for="emailRecipients">Email Recipients</label>
-                        <input type="email" id="emailRecipients" name="email_recipients" multiple placeholder="admin@example.com, ops@example.com" disabled autocomplete="email">
+                        <input type="email" id="emailRecipients" name="email_recipients" multiple placeholder="admin@example.com, ops@example.com" disabled>
                         <small>Separate multiple emails with commas</small>
                     </div>
                 </div>
@@ -533,7 +556,7 @@
                     </div>
                     <div class="form-group">
                         <label for="webhookUrl">Webhook URL</label>
-                        <input type="url" id="webhookUrl" name="webhook_url" placeholder="https://hooks.slack.com/services/..." disabled autocomplete="url">
+                        <input type="url" id="webhookUrl" name="webhook_url" placeholder="https://hooks.slack.com/services/..." disabled>
                     </div>
                 </div>
 
@@ -648,6 +671,13 @@
         function refreshAlerts() {
             if (window.alertManager && window.alertManager.refresh) {
                 window.alertManager.refresh();
+            }
+        }
+
+        function updateTimeRange() {
+            if (window.dashboard && window.dashboard.changeTimeRange) {
+                const range = document.getElementById('timeRange').value;
+                window.dashboard.changeTimeRange(range);
             }
         }
 

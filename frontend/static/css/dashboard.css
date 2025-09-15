@@ -550,7 +550,7 @@ body {
 }
 
 .severity-info {
-  background: var(--info-color);
+  background: var(--primary-color);
   color: white;
 }
 
@@ -616,8 +616,6 @@ body {
   border-radius: 10px;
   margin-left: var(--spacing-xs);
   display: none;
-  min-width: 16px;
-  text-align: center;
 }
 
 .alert-badge.visible {
@@ -1071,7 +1069,7 @@ form {
 }
 
 .card-chart {
-  height: 20px;
+  height: 120px;
   margin-bottom: var(--spacing-md);
   position: relative;
   flex: 1;
@@ -1080,10 +1078,6 @@ form {
 .card-chart canvas {
   width: 100% !important;
   height: 100% !important;
-  max-width: 120px !important;
-  max-height: 120px !important;
-  display: block;
-  margin: 0 auto;
 }
 
 .card-details {
@@ -1458,7 +1452,7 @@ form {
   }
   
   .card-chart {
-    height: 40px;
+    height: 100px;
   }
   
   .card-details {

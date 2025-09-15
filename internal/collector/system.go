@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/eyzaun/godash/internal/models"
+	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/net"
 	"github.com/shirou/gopsutil/v3/process"
@@ -573,7 +574,20 @@ func (sc *SystemCollector) GetTopProcesses(count int, sortBy string) ([]models.P
 		return nil, fmt.Errorf("failed to get process PIDs: %w", err)
 	}
 
-	var processes []models.ProcessInfo
+	// Get CPU count to normalize CPU percentages (gopsutil returns per-core values)
+	cpuCount, err := cpu.Counts(true)
+	if err != nil {
+		// Fallback to logical cores if physical cores fail
+		if cpuCountLogical, errLogical := cpu.Counts(false); errLogical == nil {
+			cpuCount = cpuCountLogical
+		} else {
+			// Last resort fallback to 1
+			cpuCount = 1
+		}
+	}
+
+	// Group processes by name to avoid duplicates and sum CPU usage
+	processGroups := make(map[string]*models.ProcessInfo)
 
 	for _, pid := range pids {
 		proc, err := process.NewProcess(pid)
@@ -589,6 +603,11 @@ func (sc *SystemCollector) GetTopProcesses(count int, sortBy string) ([]models.P
 		cpuPercent, err := proc.CPUPercent()
 		if err != nil {
 			cpuPercent = 0
+		}
+		// Normalize CPU percentage by dividing by number of cores
+		// gopsutil.CPUPercent() returns per-core values
+		if cpuCount > 0 {
+			cpuPercent = cpuPercent / float64(cpuCount)
 		}
 
 		memInfo, err := proc.MemoryInfo()
@@ -610,18 +629,31 @@ func (sc *SystemCollector) GetTopProcesses(count int, sortBy string) ([]models.P
 			statusStr = status[0]
 		}
 
-		processes = append(processes, models.ProcessInfo{
-			PID:         pid,
-			Name:        name,
-			CPUPercent:  cpuPercent,
-			MemoryBytes: memoryBytes,
-			Status:      statusStr,
-		})
-
-		// Limit the number of processes to check for performance
-		if len(processes) > count*3 {
-			break
+		// Group by process name
+		if existing, exists := processGroups[name]; exists {
+			// Add to existing group
+			existing.CPUPercent += cpuPercent
+			existing.MemoryBytes += memoryBytes
+			// Keep the lowest PID as representative
+			if pid < existing.PID {
+				existing.PID = pid
+			}
+		} else {
+			// Create new group
+			processGroups[name] = &models.ProcessInfo{
+				PID:         pid,
+				Name:        name,
+				CPUPercent:  cpuPercent,
+				MemoryBytes: memoryBytes,
+				Status:      statusStr,
+			}
 		}
+	}
+
+	// Convert map to slice for sorting
+	var processes []models.ProcessInfo
+	for _, proc := range processGroups {
+		processes = append(processes, *proc)
 	}
 
 	// Sort processes based on sortBy parameter

@@ -17,44 +17,40 @@ func NewMemoryCollector() *MemoryCollector {
 	return &MemoryCollector{}
 }
 
-// GetMemoryMetrics collects memory usage metrics
-func (m *MemoryCollector) GetMemoryMetrics() (*models.MemoryMetrics, error) {
-	// Get virtual memory statistics
+// GetMemoryMetrics collects current memory metrics
+func (mc *MemoryCollector) GetMemoryMetrics() (*models.MemoryMetrics, error) {
+	// Get virtual memory stats
 	vmStat, err := mem.VirtualMemory()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get virtual memory stats: %w", err)
 	}
 
-	// Get swap memory statistics
+	// Get swap memory stats
 	swapStat, err := mem.SwapMemory()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get swap memory stats: %w", err)
 	}
 
-	// Calculate memory usage percentage
-	usagePercent := float64(vmStat.Used) / float64(vmStat.Total) * 100
-	if vmStat.Total == 0 {
-		usagePercent = 0
-	}
-
-	// Calculate swap usage percentage
-	swapPercent := float64(0)
-	if swapStat.Total > 0 {
-		swapPercent = float64(swapStat.Used) / float64(swapStat.Total) * 100
-	}
-
-	return &models.MemoryMetrics{
+	metrics := &models.MemoryMetrics{
 		Total:       vmStat.Total,
 		Used:        vmStat.Used,
 		Available:   vmStat.Available,
 		Free:        vmStat.Free,
 		Cached:      vmStat.Cached,
 		Buffers:     vmStat.Buffers,
-		Percent:     usagePercent,
+		Percent:     vmStat.UsedPercent,
 		SwapTotal:   swapStat.Total,
 		SwapUsed:    swapStat.Used,
-		SwapPercent: swapPercent,
-	}, nil
+		SwapPercent: swapStat.UsedPercent,
+	}
+
+	// Add comprehensive logging for debugging
+	fmt.Printf("🔍 Memory Metrics Collected - Used: %.2f%% (%.1f GB / %.1f GB), Available: %.1f GB, Swap: %.2f%% (%.1f GB / %.1f GB)\n",
+		metrics.Percent, float64(metrics.Used)/(1024*1024*1024), float64(metrics.Total)/(1024*1024*1024),
+		float64(metrics.Available)/(1024*1024*1024), metrics.SwapPercent,
+		float64(metrics.SwapUsed)/(1024*1024*1024), float64(metrics.SwapTotal)/(1024*1024*1024))
+
+	return metrics, nil
 }
 
 // IsMemoryHealthy checks if memory usage is within healthy limits

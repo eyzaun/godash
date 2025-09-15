@@ -22,6 +22,7 @@ type MetricsRepository interface {
 	GetHistoryByHostname(hostname string, from, to time.Time, limit, offset int) ([]*models.Metric, error)
 	GetAverageUsage(duration time.Duration) (*models.AverageMetrics, error)
 	GetAverageUsageByHostname(hostname string, duration time.Duration) (*models.AverageMetrics, error)
+	GetAverageUsageAllRecords() (*models.AverageMetrics, error)
 
 	// Aggregation operations
 	GetMetricsSummary(from, to time.Time) (*models.MetricsSummary, error)
@@ -206,8 +207,131 @@ func (r *metricsRepository) GetAverageUsage(duration time.Duration) (*models.Ave
 		averageMetrics.MinDiskUsage = *result.MinDiskUsage
 	}
 
-	log.Printf("🔍 [DEBUG] GetAverageUsage result: CPU=%.1f%%, Memory=%.1f%%, Samples=%d",
-		averageMetrics.AvgCPUUsage, averageMetrics.AvgMemoryUsage, averageMetrics.SampleCount)
+	return averageMetrics, nil
+}
+
+// GetAverageUsageAllRecords calculates average resource usage for all records (VERY EFFICIENT - SPEED SUPPORT ADDED)
+func (r *metricsRepository) GetAverageUsageAllRecords() (*models.AverageMetrics, error) {
+	var result struct {
+		AvgCPUUsage        *float64 `gorm:"column:avg_cpu_usage"`
+		AvgMemoryUsage     *float64 `gorm:"column:avg_memory_usage"`
+		AvgDiskUsage       *float64 `gorm:"column:avg_disk_usage"`
+		AvgDiskReadSpeed   *float64 `gorm:"column:avg_disk_read_speed"`
+		AvgDiskWriteSpeed  *float64 `gorm:"column:avg_disk_write_speed"`
+		AvgNetworkUpload   *float64 `gorm:"column:avg_network_upload"`
+		AvgNetworkDownload *float64 `gorm:"column:avg_network_download"`
+		MaxCPUUsage        *float64 `gorm:"column:max_cpu_usage"`
+		MaxMemoryUsage     *float64 `gorm:"column:max_memory_usage"`
+		MaxDiskUsage       *float64 `gorm:"column:max_disk_usage"`
+		MaxDiskReadSpeed   *float64 `gorm:"column:max_disk_read_speed"`
+		MaxDiskWriteSpeed  *float64 `gorm:"column:max_disk_write_speed"`
+		MaxNetworkUpload   *float64 `gorm:"column:max_network_upload"`
+		MaxNetworkDownload *float64 `gorm:"column:max_network_download"`
+		MinCPUUsage        *float64 `gorm:"column:min_cpu_usage"`
+		MinMemoryUsage     *float64 `gorm:"column:min_memory_usage"`
+		MinDiskUsage       *float64 `gorm:"column:min_disk_usage"`
+		MinDiskReadSpeed   *float64 `gorm:"column:min_disk_read_speed"`
+		MinDiskWriteSpeed  *float64 `gorm:"column:min_disk_write_speed"`
+		MinNetworkUpload   *float64 `gorm:"column:min_network_upload"`
+		MinNetworkDownload *float64 `gorm:"column:min_network_download"`
+		SampleCount        int64    `gorm:"column:sample_count"`
+	}
+
+	if err := r.db.Model(&models.Metric{}).
+		Select(`
+			AVG(cpu_usage) as avg_cpu_usage,
+			AVG(memory_percent) as avg_memory_usage,
+			AVG(disk_percent) as avg_disk_usage,
+			AVG(disk_read_speed_mbps) as avg_disk_read_speed,
+			AVG(disk_write_speed_mbps) as avg_disk_write_speed,
+			AVG(network_upload_speed_mbps) as avg_network_upload,
+			AVG(network_download_speed_mbps) as avg_network_download,
+			MAX(cpu_usage) as max_cpu_usage,
+			MAX(memory_percent) as max_memory_usage,
+			MAX(disk_percent) as max_disk_usage,
+			MAX(disk_read_speed_mbps) as max_disk_read_speed,
+			MAX(disk_write_speed_mbps) as max_disk_write_speed,
+			MAX(network_upload_speed_mbps) as max_network_upload,
+			MAX(network_download_speed_mbps) as max_network_download,
+			MIN(cpu_usage) as min_cpu_usage,
+			MIN(memory_percent) as min_memory_usage,
+			MIN(disk_percent) as min_disk_usage,
+			MIN(disk_read_speed_mbps) as min_disk_read_speed,
+			MIN(disk_write_speed_mbps) as min_disk_write_speed,
+			MIN(network_upload_speed_mbps) as min_network_upload,
+			MIN(network_download_speed_mbps) as min_network_download,
+			COUNT(*) as sample_count
+		`).
+		Scan(&result).Error; err != nil {
+		return nil, fmt.Errorf("failed to calculate average usage for all records: %w", err)
+	}
+
+	// Handle NULL values from database
+	averageMetrics := &models.AverageMetrics{
+		SampleCount: result.SampleCount,
+	}
+
+	if result.AvgCPUUsage != nil {
+		averageMetrics.AvgCPUUsage = *result.AvgCPUUsage
+	}
+	if result.AvgMemoryUsage != nil {
+		averageMetrics.AvgMemoryUsage = *result.AvgMemoryUsage
+	}
+	if result.AvgDiskUsage != nil {
+		averageMetrics.AvgDiskUsage = *result.AvgDiskUsage
+	}
+	if result.AvgDiskReadSpeed != nil {
+		averageMetrics.AvgDiskReadSpeed = *result.AvgDiskReadSpeed
+	}
+	if result.AvgDiskWriteSpeed != nil {
+		averageMetrics.AvgDiskWriteSpeed = *result.AvgDiskWriteSpeed
+	}
+	if result.AvgNetworkUpload != nil {
+		averageMetrics.AvgNetworkUpload = *result.AvgNetworkUpload
+	}
+	if result.AvgNetworkDownload != nil {
+		averageMetrics.AvgNetworkDownload = *result.AvgNetworkDownload
+	}
+
+	// Max values
+	if result.MaxCPUUsage != nil {
+		averageMetrics.MaxCPUUsage = *result.MaxCPUUsage
+	}
+	if result.MaxMemoryUsage != nil {
+		averageMetrics.MaxMemoryUsage = *result.MaxMemoryUsage
+	}
+	if result.MaxDiskUsage != nil {
+		averageMetrics.MaxDiskUsage = *result.MaxDiskUsage
+	}
+	if result.MaxDiskReadSpeed != nil {
+		averageMetrics.MaxDiskReadSpeed = *result.MaxDiskReadSpeed
+	}
+	if result.MaxDiskWriteSpeed != nil {
+		averageMetrics.MaxDiskWriteSpeed = *result.MaxDiskWriteSpeed
+	}
+	if result.MaxNetworkUpload != nil {
+		averageMetrics.MaxNetworkUpload = *result.MaxNetworkUpload
+	}
+	if result.MaxNetworkDownload != nil {
+		averageMetrics.MaxNetworkDownload = *result.MaxNetworkDownload
+	}
+
+	// Min values
+	if result.MinCPUUsage != nil {
+		averageMetrics.MinCPUUsage = *result.MinCPUUsage
+	}
+	if result.MinMemoryUsage != nil {
+		averageMetrics.MinMemoryUsage = *result.MinMemoryUsage
+	}
+	if result.MinDiskUsage != nil {
+		averageMetrics.MinDiskUsage = *result.MinDiskUsage
+	}
+
+	log.Printf("🔍 [DEBUG] GetAverageUsageAllRecords result: CPU=%.1f%%, Memory=%.1f%%, Disk I/O=%.1f MB/s, Network=%.1f Mbps, Samples=%d",
+		averageMetrics.AvgCPUUsage, averageMetrics.AvgMemoryUsage,
+		averageMetrics.AvgDiskReadSpeed+averageMetrics.AvgDiskWriteSpeed,
+		averageMetrics.AvgNetworkUpload+averageMetrics.AvgNetworkDownload,
+		averageMetrics.SampleCount)
 
 	return averageMetrics, nil
 }

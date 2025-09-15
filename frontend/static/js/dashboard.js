@@ -105,7 +105,11 @@ class Dashboard {
             }
 
             this.alertManager = new AlertManager(this.options.apiUrl);
-            await this.alertManager.init(this);
+            
+            // Set up alert notification handling
+            if (this.alertManager.handleAlertNotification) {
+                this.handleAlertNotification = this.alertManager.handleAlertNotification.bind(this.alertManager);
+            }
 
             this.log('Alert Manager initialized');
         } catch (error) {
@@ -190,6 +194,7 @@ class Dashboard {
             statusHostname: document.getElementById('statusHostname'),
             statusMetrics: document.getElementById('statusMetrics'),
             statusTime: document.getElementById('statusTime'),
+            topProcesses: document.getElementById('topProcesses'),
 
             // Time range selector
             timeRange: document.getElementById('timeRange')
@@ -313,9 +318,7 @@ class Dashboard {
 
         // Alert notification handler
         this.websocket.on('alert_triggered', (data) => {
-            if (this.alertManager && this.alertManager.handleAlertNotification) {
-                this.alertManager.handleAlertNotification(data);
-            }
+            this.handleAlertNotification(data);
         });
 
         this.websocket.connect();
@@ -325,6 +328,13 @@ class Dashboard {
      * Setup event listeners
      */
     setupEventListeners() {
+        // Time range selector
+        if (this.elements.timeRange) {
+            this.elements.timeRange.addEventListener('change', (e) => {
+                this.changeTimeRange(e.target.value);
+            });
+        }
+
         // Window resize handler
         window.addEventListener('resize', () => {
             if (this.chartManager) {
@@ -352,6 +362,7 @@ class Dashboard {
         try {
             await this.loadCurrentMetrics();
             await this.loadSystemStats();
+            await this.loadTopProcesses();
             await this.loadHistoricalData();
             this.setupRefreshIntervals();
         } catch (error) {
@@ -400,11 +411,32 @@ class Dashboard {
     }
 
     /**
-     * Load historical data (fixed 24h range)
+     * Load top processes
      */
-    async loadHistoricalData() {
+    async loadTopProcesses() {
         try {
-            const response = await fetch(`${this.options.apiUrl}/metrics/trends?range=24h`);
+            // Try to get real process data from API
+            const response = await fetch(`${this.options.apiUrl}/metrics/processes`);
+            const result = await response.json();
+
+            if (result.success && result.data && result.data.top_processes) {
+                this.updateTopProcessesFromMetrics(result.data.top_processes);
+            } else {
+                // No process data available
+                this.updateElementText(this.elements.topProcesses, '<div class="no-data">No process data available</div>');
+            }
+        } catch (error) {
+            this.log('Error loading top processes:', error);
+            this.updateElementText(this.elements.topProcesses, '<div class="no-data">Unable to load process data</div>');
+        }
+    }
+
+    /**
+     * Load historical data
+     */
+    async loadHistoricalData(timeRange = '24h') {
+        try {
+            const response = await fetch(`${this.options.apiUrl}/metrics/trends?range=${timeRange}`);
             const result = await response.json();
 
             if (result.success && result.data && this.chartManager) {
@@ -447,6 +479,29 @@ class Dashboard {
     handleSystemStatusUpdate(data) {
         if (!data) return;
         this.updateSystemStatusDisplay(data);
+    }
+
+    /**
+     * Handle alert notifications
+     */
+    handleAlertNotification(alertData) {
+        if (!alertData) return;
+
+        if (alertData.type === 'alert_triggered' || alertData.alert_id) {
+            const alert = alertData.alert || alertData;
+            const severity = alert.severity || 'warning';
+            
+            // Show notification
+            const message = `Alert: ${alert.alert_name || alert.name} on ${alert.hostname || 'system'}`;
+            this.showNotification(message, severity === 'critical' ? 'error' : 'warning', 10000);
+            
+            // Update alert badge if alert manager exists
+            if (this.alertManager && this.alertManager.updateAlertBadge) {
+                this.alertManager.loadAlertStats();
+            }
+            
+            this.log('Alert notification handled:', alert);
+        }
     }
 
     /**
@@ -500,11 +555,10 @@ class Dashboard {
                 this.updateElementText(this.elements.zombieProcesses, metrics.zombie_processes || 0);
                 this.updateElementText(this.elements.processCount, totalProcesses);
                 
-                // Update top processes if available (only from API, not WebSocket)
-                // WebSocket processes data may be incomplete, so we rely on API calls
-                // if (metrics.processes && metrics.processes.top_processes && metrics.processes.top_processes.length > 0) {
-                //     this.updateTopProcessesFromMetrics(metrics.processes.top_processes);
-                // }
+                // Update top processes if available
+                if (metrics.top_processes && metrics.top_processes.length > 0) {
+                    this.updateTopProcessesFromMetrics(metrics.top_processes);
+                }
             } else if (metrics.processes) {
                 // Fallback to nested processes object
                 const totalProcesses = (metrics.processes.running_processes || 0) + 
@@ -731,14 +785,6 @@ class Dashboard {
             if (stats.avg_memory_usage !== undefined && stats.avg_memory_usage > 0) {
                 this.updateElementText(this.elements.avgMemory, `${stats.avg_memory_usage.toFixed(1)}%`);
             }
-
-            if (stats.avg_disk_io !== undefined && stats.avg_disk_io > 0) {
-                this.updateElementText(this.elements.avgDiskIO, `${stats.avg_disk_io.toFixed(1)} MB/s`);
-            }
-
-            if (stats.avg_network !== undefined && stats.avg_network > 0) {
-                this.updateElementText(this.elements.avgNetwork, `${stats.avg_network.toFixed(1)} Mbps`);
-            }
         } catch (error) {
             this.log('Error updating stats display:', error);
         }
@@ -767,6 +813,64 @@ class Dashboard {
     }
 
     /**
+     * Update top processes display
+     */
+    updateTopProcessesDisplay(processes) {
+        if (!processes || !this.elements.topProcesses) return;
+
+        try {
+            const processesHTML = processes.map(process => `
+                <div class="process-item">
+                    <div class="process-info">
+                        <span class="process-name">${process.name}</span>
+                        <span class="process-cpu">${process.cpu.toFixed(1)}%</span>
+                    </div>
+                </div>
+            `).join('');
+
+            this.elements.topProcesses.innerHTML = processesHTML;
+        } catch (error) {
+            this.log('Error updating top processes display:', error);
+        }
+    }
+
+    /**
+     * Update top processes from metrics API data
+     */
+    updateTopProcessesFromMetrics(topProcesses) {
+        if (!topProcesses || !this.elements.topProcesses) return;
+
+        try {
+            // Parse the top_processes string data
+            const processes = topProcesses.slice(0, 5).map(processStr => {
+                // Parse format: "@{pid=1652; name=chrome.exe; cpu_percent=36.4; memory_bytes=268435456; status=running}"
+                const pidMatch = processStr.match(/pid=(\d+)/);
+                const nameMatch = processStr.match(/name=([^;]+)/);
+                const cpuMatch = processStr.match(/cpu_percent=([\d.]+)/);
+                
+                return {
+                    pid: pidMatch ? parseInt(pidMatch[1]) : 0,
+                    name: nameMatch ? nameMatch[1] : 'Unknown',
+                    cpu: cpuMatch ? parseFloat(cpuMatch[1]) : 0
+                };
+            });
+
+            const processesHTML = processes.map(process => `
+                <div class="process-item">
+                    <div class="process-info">
+                        <span class="process-name">${process.name}</span>
+                        <span class="process-cpu">${process.cpu.toFixed(1)}%</span>
+                    </div>
+                </div>
+            `).join('');
+
+            this.elements.topProcesses.innerHTML = processesHTML;
+        } catch (error) {
+            this.log('Error updating top processes from metrics:', error);
+        }
+    }
+
+    /**
      * Update connection status indicator
      */
     updateConnectionStatus(status, message) {
@@ -789,12 +893,24 @@ class Dashboard {
     }
 
     /**
+     * Change time range for historical data
+     */
+    async changeTimeRange(range) {
+        try {
+            await this.loadHistoricalData(range);
+        } catch (error) {
+            this.log('Error changing time range:', error);
+        }
+    }
+
+    /**
      * Setup refresh intervals
      */
     setupRefreshIntervals() {
         // Clear existing intervals
         if (this.metricsInterval) clearInterval(this.metricsInterval);
         if (this.statsInterval) clearInterval(this.statsInterval);
+        if (this.processInterval) clearInterval(this.processInterval);
         if (this.timestampInterval) clearInterval(this.timestampInterval);
         
         // Metrics refresh (fallback if WebSocket fails)
@@ -810,6 +926,13 @@ class Dashboard {
                 this.loadSystemStats();
             }
         }, 10000);
+
+        // Process refresh
+        this.processInterval = setInterval(() => {
+            if (!this.isPaused) {
+                this.loadTopProcesses();
+            }
+        }, 5000);
 
         // Timestamp update
         this.timestampInterval = setInterval(() => {
@@ -858,61 +981,6 @@ class Dashboard {
         const container = document.getElementById('notifications');
         if (container) {
             container.innerHTML = '';
-        }
-    }
-
-    /**
-     * Show browser notification using Notification API
-     */
-    showBrowserNotification(title, options = {}) {
-        // Check if notifications are supported
-        if (!('Notification' in window)) {
-            this.log('Browser notifications not supported');
-            return;
-        }
-
-        // Check permission
-        if (Notification.permission === 'granted') {
-            this.createBrowserNotification(title, options);
-        } else if (Notification.permission !== 'denied') {
-            // Request permission
-            Notification.requestPermission().then(permission => {
-                if (permission === 'granted') {
-                    this.createBrowserNotification(title, options);
-                }
-            });
-        }
-    }
-
-    /**
-     * Create browser notification
-     */
-    createBrowserNotification(title, options = {}) {
-        try {
-            const notification = new Notification(title, {
-                icon: options.icon || '/favicon.ico',
-                body: options.body || '',
-                tag: options.tag || 'godash-alert',
-                requireInteraction: options.requireInteraction || false,
-                silent: false
-            });
-
-            // Auto-close after 10 seconds unless requireInteraction is true
-            if (!options.requireInteraction) {
-                setTimeout(() => {
-                    notification.close();
-                }, 10000);
-            }
-
-            // Handle click
-            notification.onclick = function() {
-                window.focus();
-                notification.close();
-            };
-
-            this.log('Browser notification shown:', title);
-        } catch (error) {
-            this.log('Error creating browser notification:', error);
         }
     }
 
@@ -1184,7 +1252,7 @@ class Dashboard {
             this.alertManager = null;
         }
 
-        [this.metricsInterval, this.statsInterval, this.timestampInterval].forEach(interval => {
+        [this.metricsInterval, this.statsInterval, this.processInterval, this.timestampInterval].forEach(interval => {
             if (interval) clearInterval(interval);
         });
 

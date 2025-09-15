@@ -147,6 +147,7 @@ func (r *Router) setupRoutes() {
 			metricsGroup.GET("/trends/:hostname", r.metricsHandler.GetUsageTrends)
 			metricsGroup.GET("/trends", r.metricsHandler.GetHistoricalTrends)
 			metricsGroup.GET("/top/:type", r.metricsHandler.GetTopHostsByUsage)
+			metricsGroup.GET("/processes", r.metricsHandler.GetTopProcesses)
 			metricsGroup.POST("", r.metricsHandler.CreateMetric) // For manual metric insertion
 		}
 
@@ -295,41 +296,4 @@ func (r *Router) GetEngine() *gin.Engine {
 // GetWebSocketHandler returns the WebSocket handler
 func (r *Router) GetWebSocketHandler() *handlers.WebSocketHandler {
 	return r.websocketHandler
-}
-
-// GetAlertHandler returns the Alert handler
-func (r *Router) GetAlertHandler() *handlers.AlertHandler {
-	return r.alertHandler
-}
-
-// Start starts the HTTP server
-func (r *Router) Start() error {
-	server := &http.Server{
-		Addr:         r.config.GetServerAddress(),
-		Handler:      r.engine,
-		ReadTimeout:  r.config.Server.ReadTimeout,
-		WriteTimeout: r.config.Server.WriteTimeout,
-	}
-
-	return server.ListenAndServe()
-}
-
-// Routes returns all registered routes
-func (r *Router) Routes() gin.RoutesInfo {
-	return r.engine.Routes()
-}
-
-// GetRoutesList returns a formatted list of all routes
-func (r *Router) GetRoutesList() []map[string]string {
-	routes := r.engine.Routes()
-	routesList := make([]map[string]string, len(routes))
-
-	for i, route := range routes {
-		routesList[i] = map[string]string{
-			"method": route.Method,
-			"path":   route.Path,
-		}
-	}
-
-	return routesList
 }

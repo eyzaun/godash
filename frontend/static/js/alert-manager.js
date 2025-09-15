@@ -531,14 +531,6 @@ class AlertManager {
             const message = `ALERT ${severity.toUpperCase()}: ${alertName} on ${hostname}`;
             this.showNotification(message, severity === 'critical' ? 'error' : 'warning', 10000);
             
-            // Show browser notification if supported and permitted
-            this.showBrowserNotification(message, {
-                body: `Threshold exceeded for ${alert.metric_type || 'system metric'}`,
-                icon: '/static/images/alert-icon.png',
-                tag: `alert-${alert.alert_id || alert.id}`,
-                requireInteraction: severity === 'critical'
-            });
-            
             // Refresh stats
             this.loadAlertStats();
             
@@ -614,61 +606,6 @@ class AlertManager {
                     notification.remove();
                 }
             }, duration);
-        }
-    }
-
-    /**
-     * Show browser notification using Notification API
-     */
-    showBrowserNotification(title, options = {}) {
-        // Check if notifications are supported
-        if (!('Notification' in window)) {
-            this.log('Browser notifications not supported');
-            return;
-        }
-
-        // Check permission
-        if (Notification.permission === 'granted') {
-            this.createBrowserNotification(title, options);
-        } else if (Notification.permission !== 'denied') {
-            // Request permission
-            Notification.requestPermission().then(permission => {
-                if (permission === 'granted') {
-                    this.createBrowserNotification(title, options);
-                }
-            });
-        }
-    }
-
-    /**
-     * Create browser notification
-     */
-    createBrowserNotification(title, options = {}) {
-        try {
-            const notification = new Notification(title, {
-                icon: options.icon || '/favicon.ico',
-                body: options.body || '',
-                tag: options.tag || 'godash-alert',
-                requireInteraction: options.requireInteraction || false,
-                silent: false
-            });
-
-            // Auto-close after 10 seconds unless requireInteraction is true
-            if (!options.requireInteraction) {
-                setTimeout(() => {
-                    notification.close();
-                }, 10000);
-            }
-
-            // Handle click
-            notification.onclick = function() {
-                window.focus();
-                notification.close();
-            };
-
-            this.log('Browser notification shown:', title);
-        } catch (error) {
-            this.log('Error creating browser notification:', error);
         }
     }
 

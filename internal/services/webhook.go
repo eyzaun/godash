@@ -10,6 +10,8 @@ import (
 
 	"github.com/eyzaun/godash/internal/config"
 	"github.com/eyzaun/godash/internal/models"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // WebhookSender interface for sending webhook notifications
@@ -21,8 +23,9 @@ type WebhookSender interface {
 
 // HTTPWebhookSender implements WebhookSender using HTTP client
 type HTTPWebhookSender struct {
-	client *http.Client
-	config *config.WebhookConfig
+	client     *http.Client
+	config     *config.WebhookConfig
+	titleCaser cases.Caser
 }
 
 // NewWebhookSender creates a new webhook sender
@@ -32,8 +35,9 @@ func NewWebhookSender(webhookConfig *config.WebhookConfig) WebhookSender {
 	}
 
 	return &HTTPWebhookSender{
-		client: client,
-		config: webhookConfig,
+		client:     client,
+		config:     webhookConfig,
+		titleCaser: cases.Title(language.English),
 	}
 }
 
@@ -244,13 +248,13 @@ func (w *HTTPWebhookSender) createSlackPayload(alert *models.Alert, history *mod
 	}
 
 	return SlackPayload{
-		Text:      fmt.Sprintf("%s *%s Alert*: %s", emoji, strings.Title(history.Severity), alert.Name),
+		Text:      fmt.Sprintf("%s *%s Alert*: %s", emoji, w.titleCaser.String(history.Severity), alert.Name),
 		Username:  "GoDash Monitor",
 		IconEmoji: ":chart_with_upwards_trend:",
 		Attachments: []SlackAttachment{
 			{
 				Color: color,
-				Title: fmt.Sprintf("%s on %s", strings.Title(alert.MetricType), history.Hostname),
+				Title: fmt.Sprintf("%s on %s", w.titleCaser.String(alert.MetricType), history.Hostname),
 				Text:  history.Message,
 				Fields: []SlackField{
 					{Title: "Current Value", Value: fmt.Sprintf("%.2f%s", history.MetricValue, unit), Short: true},
@@ -285,10 +289,10 @@ func (w *HTTPWebhookSender) createDiscordPayload(alert *models.Alert, history *m
 	return DiscordPayload{
 		Username:  "GoDash Monitor",
 		AvatarURL: "https://cdn.discordapp.com/embed/avatars/0.png",
-		Content:   fmt.Sprintf("🚨 **%s Alert**: %s", strings.Title(history.Severity), alert.Name),
+		Content:   fmt.Sprintf("🚨 **%s Alert**: %s", w.titleCaser.String(history.Severity), alert.Name),
 		Embeds: []DiscordEmbed{
 			{
-				Title:       fmt.Sprintf("%s Alert on %s", strings.Title(alert.MetricType), history.Hostname),
+				Title:       fmt.Sprintf("%s Alert on %s", w.titleCaser.String(alert.MetricType), history.Hostname),
 				Description: history.Message,
 				Color:       color,
 				Fields: []DiscordEmbedField{
@@ -296,7 +300,7 @@ func (w *HTTPWebhookSender) createDiscordPayload(alert *models.Alert, history *m
 					{Name: "Threshold", Value: fmt.Sprintf("%.2f%s", alert.Threshold, unit), Inline: true},
 					{Name: "Condition", Value: alert.Condition, Inline: true},
 					{Name: "Hostname", Value: history.Hostname, Inline: true},
-					{Name: "Severity", Value: strings.Title(history.Severity), Inline: true},
+					{Name: "Severity", Value: w.titleCaser.String(history.Severity), Inline: true},
 				},
 				Footer: DiscordEmbedFooter{
 					Text: "GoDash System Monitor",

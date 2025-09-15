@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -821,6 +822,65 @@ func (h *MetricsHandler) GetTopHostsByUsage(c *gin.Context) {
 	})
 }
 
+// GetTopProcesses gets top processes by CPU or memory usage
+// @Summary Get top processes
+// @Description Get top processes by CPU or memory usage
+// @Tags metrics
+// @Accept json
+// @Produce json
+// @Param limit query int false "Number of processes to return" default(10)
+// @Param sort query string false "Sort by (cpu, memory)" default("cpu")
+// @Success 200 {object} APIResponse{data=map[string]interface{}}
+// @Failure 400 {object} APIResponse
+// @Failure 500 {object} APIResponse
+// @Router /api/v1/metrics/processes [get]
+func (h *MetricsHandler) GetTopProcesses(c *gin.Context) {
+	// FIX: Check if systemCollector is nil
+	if h.systemCollector == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "System collector not available",
+			Message: "System collector is not initialized",
+		})
+		return
+	}
+
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	sortBy := c.DefaultQuery("sort", "cpu")
+
+	if limit <= 0 || limit > 100 {
+		limit = 10
+	}
+
+	if sortBy != "cpu" && sortBy != "memory" {
+		sortBy = "cpu"
+	}
+
+	processes, err := h.systemCollector.GetTopProcesses(limit, sortBy)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   "Failed to get top processes",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// Format processes as expected by frontend (string array with @{} format)
+	topProcesses := make([]string, len(processes))
+	for i, process := range processes {
+		topProcesses[i] = fmt.Sprintf("@{pid=%d; name=%s; cpu_percent=%.1f; memory_bytes=%d; status=%s}",
+			process.PID, process.Name, process.CPUPercent, process.MemoryBytes, process.Status)
+	}
+
+	c.JSON(http.StatusOK, APIResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"top_processes": topProcesses,
+		},
+	})
+}
+
 // CreateMetric creates a new metric entry (for manual insertion)
 // @Summary Create metric
 // @Description Create a new metric entry
@@ -994,14 +1054,20 @@ func (h *MetricsHandler) GetStats(c *gin.Context) {
 		totalHosts = len(systemStatus)
 	}
 
-	// Get average metrics for last hour - DÜZELTİLMİŞ VERSİYON
-	averageMetrics, err := h.metricsRepo.GetAverageUsage(time.Hour)
+	// Get average metrics for ALL records - DÜZELTİLMİŞ VERSİYON
+	averageMetrics, err := h.metricsRepo.GetAverageUsageAllRecords()
 	avgCpu := 0.0
 	avgMemory := 0.0
+	avgDiskIO := 0.0
+	avgNetwork := 0.0
 
 	if err == nil && averageMetrics != nil && averageMetrics.SampleCount > 0 {
 		avgCpu = averageMetrics.AvgCPUUsage
 		avgMemory = averageMetrics.AvgMemoryUsage
+		// Disk I/O: read + write speed
+		avgDiskIO = averageMetrics.AvgDiskReadSpeed + averageMetrics.AvgDiskWriteSpeed
+		// Network: upload + download speed
+		avgNetwork = averageMetrics.AvgNetworkUpload + averageMetrics.AvgNetworkDownload
 	} else {
 		// Fallback: try to get current metrics if no historical data
 		if h.systemCollector != nil {
@@ -1010,6 +1076,8 @@ func (h *MetricsHandler) GetStats(c *gin.Context) {
 			if collectorErr == nil && currentMetrics != nil {
 				avgCpu = currentMetrics.CPU.Usage
 				avgMemory = currentMetrics.Memory.Percent
+				avgDiskIO = currentMetrics.Disk.ReadSpeed + currentMetrics.Disk.WriteSpeed
+				avgNetwork = currentMetrics.Network.UploadSpeed + currentMetrics.Network.DownloadSpeed
 			}
 		}
 	}
@@ -1019,6 +1087,8 @@ func (h *MetricsHandler) GetStats(c *gin.Context) {
 		"total_hosts":      totalHosts,
 		"avg_cpu_usage":    avgCpu,
 		"avg_memory_usage": avgMemory,
+		"avg_disk_io":      avgDiskIO,
+		"avg_network":      avgNetwork,
 		"timestamp":        time.Now(),
 	}
 

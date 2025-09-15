@@ -182,8 +182,7 @@ func (cs *CollectorService) processMetrics() {
 				cs.lastCollectionTime = time.Now()
 				cs.mutex.Unlock()
 
-				log.Printf("✅ Stored metrics: CPU=%.1f%%, Memory=%.1f%%, Disk=%.1f%%",
-					metrics.CPU.Usage, metrics.Memory.Percent, metrics.Disk.Percent)
+				// Debug log removed - too verbose in production
 			}
 
 			// NEW: Check alerts after storing metrics

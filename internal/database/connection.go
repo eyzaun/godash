@@ -103,6 +103,12 @@ func (d *Database) AutoMigrate() error {
 		return fmt.Errorf("failed to migrate AlertHistory model: %w", err)
 	}
 
+	// Add missing speed columns manually if they don't exist
+	log.Println("Adding missing speed columns...")
+	if err := d.addMissingSpeedColumns(); err != nil {
+		log.Printf("Warning: failed to add missing speed columns: %v", err)
+	}
+
 	log.Println("Database auto-migration completed successfully")
 
 	// Create indexes for better performance
@@ -167,6 +173,9 @@ func (d *Database) migrateFromOldSchema() error {
 		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_write_bytes BIGINT DEFAULT 0`,
 		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_read_ops BIGINT DEFAULT 0`,
 		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_write_ops BIGINT DEFAULT 0`,
+		// Disk speed fields
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_read_speed_mbps DOUBLE PRECISION DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_write_speed_mbps DOUBLE PRECISION DEFAULT 0`,
 
 		// Network detailed fields
 		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_total_sent_bytes BIGINT DEFAULT 0`,
@@ -175,6 +184,9 @@ func (d *Database) migrateFromOldSchema() error {
 		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_packets_recv BIGINT DEFAULT 0`,
 		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_errors BIGINT DEFAULT 0`,
 		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_drops BIGINT DEFAULT 0`,
+		// Network speed fields
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_upload_speed_mbps DOUBLE PRECISION DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_download_speed_mbps DOUBLE PRECISION DEFAULT 0`,
 
 		// System info fields
 		`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS platform VARCHAR(100) DEFAULT ''`,
@@ -328,9 +340,30 @@ func (d *Database) Close() error {
 	return nil
 }
 
-// Transaction executes a function within a database transaction
-func (d *Database) Transaction(fn func(*gorm.DB) error) error {
-	return d.DB.Transaction(fn)
+// addMissingSpeedColumns adds any missing speed-related columns to the metrics table
+func (d *Database) addMissingSpeedColumns() error {
+	log.Println("Checking and adding missing speed columns...")
+
+	// Add disk speed columns
+	if err := d.DB.Exec(`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_read_speed_mbps DOUBLE PRECISION DEFAULT 0`).Error; err != nil {
+		log.Printf("Warning: failed to add disk_read_speed_mbps column: %v", err)
+	}
+
+	if err := d.DB.Exec(`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_write_speed_mbps DOUBLE PRECISION DEFAULT 0`).Error; err != nil {
+		log.Printf("Warning: failed to add disk_write_speed_mbps column: %v", err)
+	}
+
+	// Add network speed columns
+	if err := d.DB.Exec(`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_upload_speed_mbps DOUBLE PRECISION DEFAULT 0`).Error; err != nil {
+		log.Printf("Warning: failed to add network_upload_speed_mbps column: %v", err)
+	}
+
+	if err := d.DB.Exec(`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_download_speed_mbps DOUBLE PRECISION DEFAULT 0`).Error; err != nil {
+		log.Printf("Warning: failed to add network_download_speed_mbps column: %v", err)
+	}
+
+	log.Println("✅ Speed columns check completed")
+	return nil
 }
 
 // CleanupOldMetrics removes old metrics based on retention policy
