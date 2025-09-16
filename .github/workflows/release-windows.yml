@@ -52,11 +52,54 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      - name: Check Signing Secrets
+        id: check_signing
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX_B64: ${{ secrets.WINDOWS_CERT_PFX_B64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $hasPfx = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PFX_B64)
+          $hasPwd = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PASSWORD)
+          $sign = $hasPfx -and $hasPwd
+          Write-Host "Code signing enabled: $sign"
+          "sign=$sign" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Generate Windows Version Info (.syso)
+        shell: pwsh
+        run: |
+          go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
+          $tag = "${{ steps.resolve_tag.outputs.tag }}"
+          if ([string]::IsNullOrWhiteSpace($tag)) { throw "Tag not resolved" }
+          $ver = $tag.TrimStart('v')
+          # Ensure four-part version (x.y.z.w)
+          if (($ver.Split('.').Length) -lt 4) { $ver = $ver + ".0" }
+          goversioninfo -platform-specific=true -ver $ver
+
       - name: Build Windows EXE
         shell: pwsh
         run: |
           go env
           go build -o build\godash.exe .
+
+      - name: Code Sign EXE (if certificate provided)
+        if: ${{ steps.check_signing.outputs.sign == 'True' }}
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX_B64: ${{ secrets.WINDOWS_CERT_PFX_B64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          Write-Host "Code signing build\\godash.exe"
+          $pfxPath = "$env:RUNNER_TEMP\\codesign.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_B64))
+          & signtool sign /f $pfxPath /p $env:WINDOWS_CERT_PASSWORD /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com build\godash.exe
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
+
+      - name: Verify Signature (if signed)
+        if: ${{ steps.check_signing.outputs.sign == 'True' }}
+        shell: pwsh
+        run: |
+          & signtool verify /pa /v build\godash.exe
 
       - name: Create README for ZIP
         shell: pwsh
@@ -85,12 +128,23 @@ jobs:
           Compress-Archive -Path build\godash.exe, release\README-WINDOWS.txt -DestinationPath $zip
           Write-Host "Created $zip"
 
+      - name: Generate SHA256 checksum
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.resolve_tag.outputs.tag }}"
+          $zip = "godash-$tag-windows-x64.zip"
+          $hash = Get-FileHash $zip -Algorithm SHA256
+          $out = "$($hash.Hash)  $zip"
+          Set-Content -Path "$zip.sha256.txt" -Value $out -Encoding ASCII
+          Write-Host "SHA256: $out"
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.resolve_tag.outputs.tag }}
           files: |
             godash-${{ steps.resolve_tag.outputs.tag }}-windows-x64.zip
+            godash-${{ steps.resolve_tag.outputs.tag }}-windows-x64.zip.sha256.txt
           draft: false
           prerelease: false
         env:
