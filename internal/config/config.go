@@ -24,6 +24,7 @@ type ServerConfig struct {
 	Mode         string        `json:"mode" yaml:"mode"` // debug, release, test
 	ReadTimeout  time.Duration `json:"read_timeout" yaml:"read_timeout"`
 	WriteTimeout time.Duration `json:"write_timeout" yaml:"write_timeout"`
+	AutoOpen     bool          `json:"auto_open" yaml:"auto_open"`
 }
 
 // DatabaseConfig holds database configuration
@@ -105,23 +106,24 @@ func Load() (*Config, error) {
 // loadServerConfig loads server configuration from environment variables
 func loadServerConfig() ServerConfig {
 	return ServerConfig{
-		Host:         getEnvString("SERVER_HOST", "0.0.0.0"),
+		Host:         getEnvString("SERVER_HOST", "127.0.0.1"),
 		Port:         getEnvInt("SERVER_PORT", 8080),
-		Mode:         getEnvString("SERVER_MODE", "debug"),
+		Mode:         getEnvString("SERVER_MODE", "release"),
 		ReadTimeout:  getEnvDuration("SERVER_READ_TIMEOUT", 30*time.Second),
 		WriteTimeout: getEnvDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
+		AutoOpen:     getEnvBool("SERVER_AUTO_OPEN", true),
 	}
 }
 
 // loadDatabaseConfig loads database configuration from environment variables
 func loadDatabaseConfig() DatabaseConfig {
 	return DatabaseConfig{
-		Driver:          getEnvString("DB_DRIVER", "postgres"),
+		Driver:          getEnvString("DB_DRIVER", "sqlite"),
 		Host:            getEnvString("DB_HOST", "localhost"),
 		Port:            getEnvInt("DB_PORT", 5433),
 		User:            getEnvString("DB_USER", "godash"),
 		Password:        getEnvString("DB_PASSWORD", "password"),
-		Name:            getEnvString("DB_NAME", "godash"),
+		Name:            getEnvString("DB_NAME", "godash"), // ignored in sqlite
 		SQLitePath:      getEnvString("SQLITE_PATH", "godash.db"),
 		SSLMode:         getEnvString("DB_SSL_MODE", "disable"),
 		Timezone:        getEnvString("DB_TIMEZONE", "UTC"),

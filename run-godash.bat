@@ -4,6 +4,7 @@ REM GoDash Windows Launcher - Standalone SQLite by default (set DB_DRIVER=postgr
 set SERVER_HOST=0.0.0.0
 set SERVER_PORT=8080
 set SERVER_MODE=release
+set SERVER_AUTO_OPEN=0
 
 REM Database settings
 IF "%DB_DRIVER%"=="" set DB_DRIVER=sqlite

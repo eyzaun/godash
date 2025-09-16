@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"time"
@@ -28,6 +30,8 @@ type Router struct {
 	healthHandler    *handlers.HealthHandler
 	websocketHandler *handlers.WebSocketHandler
 	alertHandler     *handlers.AlertHandler
+	templateFS       fs.FS
+	staticFS         fs.FS
 }
 
 // New creates a new API router with alert system
@@ -39,6 +43,8 @@ func New(
 	alertService *services.AlertService,
 	emailSender services.EmailSender,
 	webhookSender services.WebhookSender,
+	templateFS fs.FS,
+	staticFS fs.FS,
 ) *Router {
 	// Set gin mode
 	gin.SetMode(cfg.Server.Mode)
@@ -63,6 +69,8 @@ func New(
 		healthHandler:    healthHandler,
 		websocketHandler: websocketHandler,
 		alertHandler:     alertHandler,
+		templateFS:       templateFS,
+		staticFS:         staticFS,
 	}
 
 	// Setup middleware
@@ -216,9 +224,23 @@ func (r *Router) setupRoutes() {
 		}
 	}
 
-	// Static file serving and dashboard routes
-	r.engine.Static("/static", "./web/static")
-	r.engine.LoadHTMLGlob("web/templates/*")
+	// Static file serving and templates
+	if r.staticFS != nil {
+		// Serve from embedded FS
+		r.engine.StaticFS("/static", http.FS(r.staticFS))
+	} else {
+		// Fallback to disk
+		r.engine.Static("/static", "./web/static")
+	}
+
+	if r.templateFS != nil {
+		// Parse templates from embedded FS
+		tmpl := template.Must(template.ParseFS(r.templateFS, "*.html"))
+		r.engine.SetHTMLTemplate(tmpl)
+	} else {
+		// Fallback to disk
+		r.engine.LoadHTMLGlob("web/templates/*")
+	}
 
 	// Single dashboard route (simplified)
 	dashboardHandler := func(c *gin.Context) {

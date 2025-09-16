@@ -3,10 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -118,7 +122,26 @@ func initializeApplication() (*Application, error) {
 	collectorService.SetAlertService(alertService)
 
 	// Initialize API router
-	router := api.New(cfg, metricsRepo, alertRepo, collectorService, alertService, emailSender, webhookSender)
+	// Setup embedded assets if available (single-exe mode)
+	var tplFS, statFS fs.FS
+	// embeddedAssets is defined in assets_embed.go; it's always present once built with this file.
+	// We create sub-FS for templates and static; if this panics in dev, we’ll fall back to disk.
+	// To avoid panic in dev when assets not present yet, wrap in a safe parse.
+	{
+		// Try to obtain sub FS; if it fails, leave nils to use disk paths.
+		if sub, err := fs.Sub(embeddedAssets, "web/templates"); err == nil {
+			// Sanity parse a template to ensure files exist
+			if _, err := template.ParseFS(sub, "*.html"); err == nil {
+				tplFS = sub
+			}
+		}
+		if sub, err := fs.Sub(embeddedAssets, "web/static"); err == nil {
+			// Check that at least directory opens
+			statFS = sub
+		}
+	}
+
+	router := api.New(cfg, metricsRepo, alertRepo, collectorService, alertService, emailSender, webhookSender, tplFS, statFS)
 
 	// Connect alert service to WebSocket handler for real-time alert broadcasting
 	alertService.SetWebSocketHandler(router.GetWebSocketHandler())
@@ -169,6 +192,51 @@ func (app *Application) run(ctx context.Context) error {
 			serverErrors <- fmt.Errorf("HTTP server error: %w", err)
 		}
 	}()
+
+	// Auto-open browser shortly after start (single-exe UX).
+	if app.config.Server.AutoOpen {
+		go func() {
+			time.Sleep(1200 * time.Millisecond)
+			url := fmt.Sprintf("http://%s/", app.config.GetServerAddress())
+
+			// If Windows, prefer Edge/Chrome app window to avoid opening a regular tab.
+			if runtime.GOOS == "windows" {
+				browsers := []string{
+					os.Getenv("ProgramFiles") + "\\Microsoft\\Edge\\Application\\msedge.exe",
+					os.Getenv("ProgramFiles(x86)") + "\\Microsoft\\Edge\\Application\\msedge.exe",
+					os.Getenv("ProgramFiles") + "\\Google\\Chrome\\Application\\chrome.exe",
+					os.Getenv("ProgramFiles(x86)") + "\\Google\\Chrome\\Application\\chrome.exe",
+				}
+				kiosk := os.Getenv("APP_KIOSK") == "1"
+				for _, path := range browsers {
+					if _, err := os.Stat(path); err == nil {
+						var cmd *exec.Cmd
+						if kiosk && (path == browsers[0] || path == browsers[1]) {
+							// Edge kiosk supports "--kiosk <url>"
+							cmd = exec.Command(path, "--new-window", "--kiosk", url)
+						} else {
+							// App window for both Edge/Chrome
+							cmd = exec.Command(path, "--new-window", "--app="+url)
+						}
+						_ = cmd.Start()
+						return
+					}
+				}
+
+				// Fallback to default browser if no known browser path found
+				_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+				return
+			}
+
+			// Non-Windows: open default browser (best-effort)
+			// macOS: open, Linux: xdg-open
+			if runtime.GOOS == "darwin" {
+				_ = exec.Command("open", url).Start()
+			} else if runtime.GOOS == "linux" {
+				_ = exec.Command("xdg-open", url).Start()
+			}
+		}()
+	}
 
 	// Wait for either context cancellation or server error
 	select {

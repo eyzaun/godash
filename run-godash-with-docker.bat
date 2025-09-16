@@ -36,15 +36,8 @@ if errorlevel 1 (
     )
     if %%i EQU 1 echo (this can take ~1-2 minutes the first time)
   )
-  echo [WARN] Docker engine did not report ready in time. Will try to proceed.
-  REM Double-check with a lightweight docker ps
-  docker ps >nul 2>&1
-  if errorlevel 1 (
-    echo [ERROR] Docker CLI cannot reach the engine. Please open Docker Desktop and try again.
-    exit /b 1
-  ) else (
-    echo Docker appears to be reachable. Continuing...
-  )
+  echo [ERROR] Docker engine did not start in time. Please ensure Docker Desktop is running and try again.
+  exit /b 1
 )
 
 :docker_ready
@@ -64,17 +57,17 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
-echo Waiting for GoDash HTTP health at http://localhost:8080/health ...
-REM Poll HTTP endpoint (up to ~120s)
+echo Waiting for GoDash to become healthy...
+REM Simple wait loop (up to ~60s)
 setlocal enabledelayedexpansion
-for /l %%i in (1,1,120) do (
-  powershell -NoProfile -Command "try { $r=Invoke-WebRequest -UseBasicParsing http://localhost:8080/health; if($r.StatusCode -eq 200){ exit 0 } } catch { exit 1 }" >nul 2>&1
+for /l %%i in (1,1,30) do (
+  timeout /t 2 >nul
+  docker ps --filter "name=godash-monitor" --filter "health=healthy" --format "table {{.Names}}\t{{.Status}}" | find /i "healthy" >nul
   if !ERRORLEVEL! EQU 0 (
     echo Service is healthy.
     goto :open
   )
-  if %%i EQU 1 echo (first startup may take 1-2 minutes)
-  timeout /t 1 >nul
+  echo Waiting (%%i/30)...
 )
 
 :open
