@@ -4,17 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (e.g., v0.9.0)"
-        required: true
+        description: "Tag to release (e.g., v0.9.0). If empty, and workflow runs on a tag, it will auto-detect."
+        required: false
         type: string
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   build-and-release:
     runs-on: windows-latest
     permissions:
       contents: write
-    env:
-      TAG: ${{ inputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,6 +24,22 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.5'
+
+      - name: Resolve tag
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.tag }}"
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            if ($env:GITHUB_REF -like 'refs/tags/*') {
+              $tag = $env:GITHUB_REF.Substring(10)
+            }
+          }
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            Write-Error "TAG not provided and not running on a tag."
+            exit 1
+          }
+          "TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Resolved TAG=$tag"
 
       - name: Cache Go build
         uses: actions/cache@v4
@@ -68,9 +85,9 @@ jobs:
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.TAG }}
+          tag_name: ${{ (github.ref_type == 'tag' && github.ref_name) || inputs.tag }}
           files: |
-            godash-${{ env.TAG }}-windows-x64.zip
+            godash-${{ (github.ref_type == 'tag' && github.ref_name) || inputs.tag }}-windows-x64.zip
           draft: false
           prerelease: false
         env:
