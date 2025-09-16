@@ -660,9 +660,15 @@ class AlertManager {
                 }, 10000);
             }
 
-            // Handle click
+            // Handle click without forcing focus unless necessary to avoid scroll jumps
             notification.onclick = function() {
-                window.focus();
+                try {
+                    if (document.hasFocus && !document.hasFocus()) {
+                        window.focus();
+                    }
+                } catch (e) {
+                    // Ignore if focusing is restricted
+                }
                 notification.close();
             };
 

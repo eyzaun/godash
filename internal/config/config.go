@@ -28,11 +28,15 @@ type ServerConfig struct {
 
 // DatabaseConfig holds database configuration
 type DatabaseConfig struct {
-	Host            string        `json:"host" yaml:"host"`
-	Port            int           `json:"port" yaml:"port"`
-	User            string        `json:"user" yaml:"user"`
-	Password        string        `json:"password" yaml:"password"`
-	Name            string        `json:"name" yaml:"name"`
+	// Driver can be "postgres" or "sqlite"
+	Driver   string `json:"driver" yaml:"driver"`
+	Host     string `json:"host" yaml:"host"`
+	Port     int    `json:"port" yaml:"port"`
+	User     string `json:"user" yaml:"user"`
+	Password string `json:"password" yaml:"password"`
+	Name     string `json:"name" yaml:"name"`
+	// For SQLite, use SQLitePath (file path). If empty, Name may be used.
+	SQLitePath      string        `json:"sqlite_path" yaml:"sqlite_path"`
 	SSLMode         string        `json:"ssl_mode" yaml:"ssl_mode"`
 	Timezone        string        `json:"timezone" yaml:"timezone"`
 	MaxOpenConns    int           `json:"max_open_conns" yaml:"max_open_conns"`
@@ -112,11 +116,13 @@ func loadServerConfig() ServerConfig {
 // loadDatabaseConfig loads database configuration from environment variables
 func loadDatabaseConfig() DatabaseConfig {
 	return DatabaseConfig{
+		Driver:          getEnvString("DB_DRIVER", "postgres"),
 		Host:            getEnvString("DB_HOST", "localhost"),
 		Port:            getEnvInt("DB_PORT", 5433),
 		User:            getEnvString("DB_USER", "godash"),
 		Password:        getEnvString("DB_PASSWORD", "password"),
 		Name:            getEnvString("DB_NAME", "godash"),
+		SQLitePath:      getEnvString("SQLITE_PATH", "godash.db"),
 		SSLMode:         getEnvString("DB_SSL_MODE", "disable"),
 		Timezone:        getEnvString("DB_TIMEZONE", "UTC"),
 		MaxOpenConns:    getEnvInt("DB_MAX_OPEN_CONNS", 25),
@@ -184,16 +190,23 @@ func (c *Config) Validate() error {
 	}
 
 	// Validate database configuration
-	if c.Database.Host == "" {
-		return fmt.Errorf("database host is required")
-	}
-
-	if c.Database.Port < 1 || c.Database.Port > 65535 {
-		return fmt.Errorf("invalid database port: %d", c.Database.Port)
-	}
-
-	if c.Database.Name == "" {
-		return fmt.Errorf("database name is required")
+	switch c.Database.Driver {
+	case "postgres", "Postgres", "POSTGRES":
+		if c.Database.Host == "" {
+			return fmt.Errorf("database host is required for postgres")
+		}
+		if c.Database.Port < 1 || c.Database.Port > 65535 {
+			return fmt.Errorf("invalid database port: %d", c.Database.Port)
+		}
+		if c.Database.Name == "" {
+			return fmt.Errorf("database name is required for postgres")
+		}
+	case "sqlite", "SQLite", "SQLITE":
+		if c.Database.SQLitePath == "" && c.Database.Name == "" {
+			return fmt.Errorf("sqlite path or name is required for sqlite driver")
+		}
+	default:
+		return fmt.Errorf("unsupported database driver: %s", c.Database.Driver)
 	}
 
 	// Validate metrics configuration
@@ -256,6 +269,7 @@ func (c *Config) GetServerAddress() string {
 
 // GetDSN returns the database connection string
 func (c *Config) GetDSN() string {
+	// For Postgres only; SQLite uses SQLitePath directly
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s TimeZone=%s",
 		c.Database.Host,
 		c.Database.Port,
@@ -265,6 +279,12 @@ func (c *Config) GetDSN() string {
 		c.Database.SSLMode,
 		c.Database.Timezone,
 	)
+}
+
+// IsSQLite indicates whether the configured DB is SQLite
+func (c *Config) IsSQLite() bool {
+	d := c.Database.Driver
+	return d == "sqlite" || d == "SQLite" || d == "SQLITE"
 }
 
 // Helper functions for environment variable parsing

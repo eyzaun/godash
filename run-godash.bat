@@ -1,11 +1,14 @@
 @echo off
-REM GoDash Windows Launcher (local Postgres on localhost:5433)
+REM GoDash Windows Launcher - Standalone SQLite by default (set DB_DRIVER=postgres to use Postgres)
 
 set SERVER_HOST=0.0.0.0
 set SERVER_PORT=8080
 set SERVER_MODE=release
 
-REM Database (matches docker-compose exposed port)
+REM Database settings
+IF "%DB_DRIVER%"=="" set DB_DRIVER=sqlite
+set SQLITE_PATH=%~dp0godash.db
+REM Postgres settings (only used if DB_DRIVER=postgres)
 set DB_HOST=localhost
 set DB_PORT=5433
 set DB_USER=godash
@@ -35,13 +38,7 @@ start "GoDash Server" /min build\godash.exe
 
 REM Wait for health endpoint to be ready (up to 60s)
 echo Waiting for server to become healthy...
-powershell -NoProfile -Command "\
-  $ErrorActionPreference='SilentlyContinue'; \
-  $url='%APP_URL%health'; \
-  for($i=1;$i -le 60;$i++){ \
-    try{ $r=Invoke-WebRequest -UseBasicParsing $url; if($r.StatusCode -eq 200){ exit 0 } }catch{}; \
-    Start-Sleep -Seconds 1 \
-  }; exit 1"
+powershell -NoProfile -Command "${env:ErrorActionPreference}='SilentlyContinue'; $u='%APP_URL%health'; for($i=1; $i -le 60; $i++){ try { $r=Invoke-WebRequest -UseBasicParsing $u; if ($r.StatusCode -eq 200) { exit 0 } } catch {} Start-Sleep -Seconds 1 }; exit 1"
 if not %ERRORLEVEL%==0 (
   echo [WARN] Server health check timed out. Will try to open UI anyway.
 )

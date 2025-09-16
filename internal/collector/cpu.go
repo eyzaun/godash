@@ -11,6 +11,7 @@ import (
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/load"
+	wmi "github.com/yusufpapurcu/wmi"
 )
 
 // CPUCollector handles CPU metrics collection
@@ -112,27 +113,48 @@ func (c *CPUCollector) GetCPUTemperature() (float64, error) {
 
 // getCPUTemperatureWindows gets temperature on Windows using WMI
 func (c *CPUCollector) getCPUTemperatureWindows() (float64, error) {
-	// Use gopsutil to get temperature from thermal sensors
-	temps, err := host.SensorsTemperatures()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get temperature sensors: %w", err)
+	// 1) Try WMI: MSAcpi_ThermalZoneTemperature (values in tenths of Kelvin)
+	type thermalZone struct {
+		CurrentTemperature uint32
+		InstanceName       string
 	}
 
-	// Find CPU temperature sensor
-	for _, temp := range temps {
-		// Look for common CPU temperature sensor names
-		sensorName := strings.ToLower(temp.SensorKey)
-		if strings.Contains(sensorName, "cpu") ||
-			strings.Contains(sensorName, "core") ||
-			strings.Contains(sensorName, "package") ||
-			strings.Contains(sensorName, "processor") {
-			if temp.Temperature > 0 && temp.Temperature < 120 { // Reasonable range
-				return temp.Temperature, nil
+	var zones []thermalZone
+	// Query from root\WMI namespace
+	if err := wmi.QueryNamespace("SELECT CurrentTemperature, InstanceName FROM MSAcpi_ThermalZoneTemperature", &zones, "root\\WMI"); err == nil {
+		best := -1.0
+		for _, z := range zones {
+			if z.CurrentTemperature == 0 {
+				continue
+			}
+			// Convert to Celsius
+			celsius := (float64(z.CurrentTemperature) / 10.0) - 273.15
+			// Filter obviously invalid values
+			if celsius > 10 && celsius < 120 {
+				if celsius > best {
+					best = celsius
+				}
+			}
+		}
+		if best > 0 {
+			return best, nil
+		}
+	}
+
+	// 2) Fallback: gopsutil SensorsTemperatures (may not work on many Windows setups)
+	temps, err := host.SensorsTemperatures()
+	if err == nil {
+		for _, temp := range temps {
+			sensorName := strings.ToLower(temp.SensorKey)
+			if strings.Contains(sensorName, "cpu") || strings.Contains(sensorName, "core") || strings.Contains(sensorName, "package") || strings.Contains(sensorName, "processor") {
+				if temp.Temperature > 10 && temp.Temperature < 120 {
+					return temp.Temperature, nil
+				}
 			}
 		}
 	}
 
-	return 0, fmt.Errorf("no CPU temperature sensor found")
+	return 0, fmt.Errorf("no CPU temperature sensor found via WMI or sensors")
 }
 
 // getCPUTemperatureLinux gets temperature on Linux

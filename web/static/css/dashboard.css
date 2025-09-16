@@ -68,7 +68,14 @@
 
 html {
   font-size: 16px;
-  scroll-behavior: smooth;
+  /* Avoid implicit smooth scrolling that can accentuate unintended scroll jumps */
+  scroll-behavior: auto;
+  /* Disable scroll anchoring so dynamic updates don't shift the viewport */
+  overflow-anchor: none;
+  /* Reserve space for scrollbar to prevent layout shifts that can nudge scroll */
+  scrollbar-gutter: stable;
+  /* Prevent overscroll behaviors from causing bounce/scroll chaining */
+  overscroll-behavior: none;
 }
 
 body {
@@ -79,6 +86,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  /* Ensure body doesn't attempt to preserve anchor position during frequent DOM updates */
+  overflow-anchor: none;
 }
 
 /* ==========================================================================
@@ -1043,7 +1052,7 @@ form {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: 1.1rem;
+  font-size: 1.3rem;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -1052,13 +1061,13 @@ form {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: 2rem;
+  font-size: 2.6rem;
   font-weight: 700;
   color: var(--primary-color);
 }
 
 .card-value .unit {
-  font-size: 1.2rem;
+  font-size: 1.4rem;
   color: var(--text-secondary);
   margin-left: 2px;
 }
@@ -1071,19 +1080,36 @@ form {
 }
 
 .card-chart {
-  height: 20px;
+  /* Fixed height to prevent gradual vertical growth during chart redraws */
+  height: 140px;
   margin-bottom: var(--spacing-md);
   position: relative;
-  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
 }
 
 .card-chart canvas {
-  width: 100% !important;
-  height: 100% !important;
-  max-width: 120px !important;
-  max-height: 120px !important;
+  /* Keep canvas size stable inside fixed-height container */
+  width: 120px !important;
+  height: 120px !important;
+  max-width: none !important;
+  max-height: none !important;
   display: block;
   margin: 0 auto;
+}
+
+/* Extra hardening for Edge app/kiosk mode */
+body.edge-app-mode .card {
+  contain: layout paint;
+}
+body.edge-app-mode .card-chart {
+  height: 140px !important;
+}
+body.edge-app-mode .card-chart canvas {
+  width: 120px !important;
+  height: 120px !important;
 }
 
 .card-details {
@@ -1097,7 +1123,7 @@ form {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
-  font-size: 0.8rem;
+  font-size: 0.95rem;
   text-align: center;
 }
 

@@ -479,20 +479,54 @@ func (r *metricsRepository) GetUsageTrends(hostname string, hours int) ([]*model
 
 	since := time.Now().Add(-time.Duration(hours) * time.Hour)
 
-	// PostgreSQL DATE_TRUNC function for hour grouping
-	if err := r.db.Model(&models.Metric{}).
-		Select(`
-			DATE_TRUNC('hour', timestamp) as hour,
+	// Portable fallback: group by hour using strftime for SQLite and date_trunc for Postgres
+	// Try Postgres first; if it fails at runtime, caller will see the error. For cross-DB, consider splitting by dialect.
+	err := r.db.Model(&models.Metric{}).
+		Select(`DATE_TRUNC('hour', timestamp) as hour,
 			AVG(cpu_usage) as avg_cpu_usage,
 			AVG(memory_percent) as avg_memory_usage,
 			AVG(disk_percent) as avg_disk_usage,
-			COUNT(*) as sample_count
-		`).
+			COUNT(*) as sample_count`).
 		Where("hostname = ? AND timestamp >= ?", hostname, since).
 		Group("DATE_TRUNC('hour', timestamp)").
 		Order("hour DESC").
-		Scan(&trends).Error; err != nil {
-		return nil, fmt.Errorf("failed to get usage trends: %w", err)
+		Scan(&trends).Error
+
+	if err != nil {
+		// Attempt SQLite variant using strftime
+		type row struct {
+			HourStr        string  `gorm:"column:hour"`
+			AvgCPUUsage    float64 `gorm:"column:avg_cpu_usage"`
+			AvgMemoryUsage float64 `gorm:"column:avg_memory_usage"`
+			AvgDiskUsage   float64 `gorm:"column:avg_disk_usage"`
+			SampleCount    int64   `gorm:"column:sample_count"`
+		}
+		var rows []row
+		if err2 := r.db.Model(&models.Metric{}).
+			Select(`strftime('%Y-%m-%dT%H:00:00Z', timestamp) as hour,
+				AVG(cpu_usage) as avg_cpu_usage,
+				AVG(memory_percent) as avg_memory_usage,
+				AVG(disk_percent) as avg_disk_usage,
+				COUNT(*) as sample_count`).
+			Where("hostname = ? AND timestamp >= ?", hostname, since).
+			Group("strftime('%Y-%m-%dT%H:00:00Z', timestamp)").
+			Order("hour DESC").
+			Scan(&rows).Error; err2 != nil {
+			return nil, fmt.Errorf("failed to get usage trends: %w", err)
+		}
+		// Map to trends with parsed time
+		trends = make([]*models.UsageTrend, 0, len(rows))
+		for _, rrow := range rows {
+			t, _ := time.Parse(time.RFC3339, rrow.HourStr)
+			trends = append(trends, &models.UsageTrend{
+				Hour:           t,
+				AvgCPUUsage:    rrow.AvgCPUUsage,
+				AvgMemoryUsage: rrow.AvgMemoryUsage,
+				AvgDiskUsage:   rrow.AvgDiskUsage,
+				SampleCount:    rrow.SampleCount,
+			})
+		}
+		return trends, nil
 	}
 
 	return trends, nil
@@ -531,8 +565,8 @@ func (r *metricsRepository) GetCountByDateRange(from, to time.Time) (int64, erro
 func (r *metricsRepository) GetSystemStatus() ([]*models.SystemStatus, error) {
 	var status []*models.SystemStatus
 
-	// PostgreSQL specific query with DISTINCT ON
-	if err := r.db.Raw(`
+	// Try PostgreSQL DISTINCT ON; if error, fallback to a portable approach
+	err := r.db.Raw(`
 		SELECT DISTINCT ON (hostname)
 			hostname,
 			cpu_usage,
@@ -546,8 +580,47 @@ func (r *metricsRepository) GetSystemStatus() ([]*models.SystemStatus, error) {
 			END as status
 		FROM metrics
 		ORDER BY hostname, timestamp DESC
-	`).Scan(&status).Error; err != nil {
-		return nil, fmt.Errorf("failed to get system status: %w", err)
+	`).Scan(&status).Error
+	if err != nil {
+		// Portable fallback: get latest record per host using subquery
+		type row struct {
+			Hostname      string    `gorm:"column:hostname"`
+			CPUUsage      float64   `gorm:"column:cpu_usage"`
+			MemoryPercent float64   `gorm:"column:memory_percent"`
+			DiskPercent   float64   `gorm:"column:disk_percent"`
+			Timestamp     time.Time `gorm:"column:timestamp"`
+		}
+		var rows []row
+		// For SQLite/Postgres portability, use a window function if available; otherwise join on max timestamp
+		// Join on (hostname, max(timestamp))
+		sub := r.db.Model(&models.Metric{}).
+			Select("hostname, MAX(timestamp) as max_ts").
+			Group("hostname")
+		if err2 := r.db.Table("metrics m").
+			Select("m.hostname, m.cpu_usage, m.memory_percent, m.disk_percent, m.timestamp").
+			Joins("JOIN (?) t ON t.hostname = m.hostname AND t.max_ts = m.timestamp", sub).
+			Scan(&rows).Error; err2 != nil {
+			return nil, fmt.Errorf("failed to get system status: %w", err)
+		}
+		// Map and compute status by recency
+		now := time.Now()
+		status = make([]*models.SystemStatus, 0, len(rows))
+		for _, rr := range rows {
+			s := "offline"
+			if rr.Timestamp.After(now.Add(-5 * time.Minute)) {
+				s = "online"
+			} else if rr.Timestamp.After(now.Add(-15 * time.Minute)) {
+				s = "warning"
+			}
+			status = append(status, &models.SystemStatus{
+				Hostname:      rr.Hostname,
+				CPUUsage:      rr.CPUUsage,
+				MemoryPercent: rr.MemoryPercent,
+				DiskPercent:   rr.DiskPercent,
+				Timestamp:     rr.Timestamp,
+				Status:        s,
+			})
+		}
 	}
 
 	// If no database results, try to provide a default status

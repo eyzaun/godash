@@ -100,6 +100,7 @@ class ChartManager {
                 duration: this.options.animationDuration,
                 easing: 'easeInOutQuart'
             },
+            responsiveAnimationDuration: 0,
             interaction: {
                 intersect: false,
                 mode: 'index'
@@ -175,11 +176,13 @@ class ChartManager {
                         data: this.getInitialDonutData(type),
                         backgroundColor: this.getDonutColors(type, color),
                         borderWidth: 0,
-                        cutout: '90%'
+                        cutout: '80%'
                     }]
                 },
                 options: {
                     ...this.defaultOptions,
+                    responsive: false,
+                    maintainAspectRatio: false,
                     plugins: {
                         ...this.defaultOptions.plugins,
                         tooltip: {
@@ -298,6 +301,7 @@ class ChartManager {
                 },
                 options: {
                     ...this.defaultOptions,
+                    responsiveAnimationDuration: 0,
                     scales: {
                         x: {
                             display: true,
@@ -388,6 +392,9 @@ class ChartManager {
                 },
                 options: {
                     ...this.defaultOptions,
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    responsiveAnimationDuration: 0,
                     scales: {
                         x: {
                             display: true,
@@ -460,10 +467,18 @@ class ChartManager {
             // Network chart shows upload/download distribution
             this.updateNetworkChart(metrics);
 
-            // Temperature chart
-            const temperature = Math.min(85, Math.max(0, metrics.cpu_temperature_c || metrics.simulated_temperature || 45));
-            const tempPercentage = (temperature / 85) * 100;
-            this.updateDonutChart('temperature', tempPercentage);
+            // Temperature chart: only update with real value to avoid misleading constant 45°C
+            let tempVal;
+            if (typeof metrics.cpu_temperature_c === 'number' && isFinite(metrics.cpu_temperature_c) && metrics.cpu_temperature_c > 0) {
+                tempVal = metrics.cpu_temperature_c;
+            } else if (typeof metrics.simulated_temperature === 'number' && isFinite(metrics.simulated_temperature) && metrics.simulated_temperature > 0) {
+                tempVal = metrics.simulated_temperature;
+            }
+            if (tempVal !== undefined) {
+                const clamped = Math.min(85, Math.max(0, tempVal));
+                const tempPercentage = (clamped / 85) * 100;
+                this.updateDonutChart('temperature', tempPercentage);
+            }
 
             // Process chart
             this.updateProcessChart(metrics);
@@ -756,7 +771,7 @@ class ChartManager {
                             'rgba(255, 255, 255, 0.1)'
                         ],
                         borderWidth: 0,
-                        cutout: '90%'
+                        cutout: '80%'
                     }]
                 },
                 options: {

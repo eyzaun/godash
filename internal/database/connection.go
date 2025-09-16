@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -43,7 +44,23 @@ func New(cfg *config.Config) (*Database, error) {
 	}
 
 	// Create database connection
-	db, err := gorm.Open(postgres.Open(cfg.GetDSN()), gormConfig)
+	var db *gorm.DB
+	var err error
+	if cfg.IsSQLite() {
+		// SQLite path
+		path := cfg.Database.SQLitePath
+		if path == "" {
+			path = cfg.Database.Name
+			if path == "" {
+				path = "godash.db"
+			}
+		}
+		log.Printf("Connecting to SQLite database at: %s", path)
+		db, err = gorm.Open(sqlite.Open(path), gormConfig)
+	} else {
+		log.Printf("Connecting to PostgreSQL at %s:%d db=%s", cfg.Database.Host, cfg.Database.Port, cfg.Database.Name)
+		db, err = gorm.Open(postgres.Open(cfg.GetDSN()), gormConfig)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -54,10 +71,12 @@ func New(cfg *config.Config) (*Database, error) {
 		return nil, fmt.Errorf("failed to get underlying sql.DB: %w", err)
 	}
 
-	// Configure connection pool
-	sqlDB.SetMaxOpenConns(cfg.Database.MaxOpenConns)
-	sqlDB.SetMaxIdleConns(cfg.Database.MaxIdleConns)
-	sqlDB.SetConnMaxLifetime(cfg.Database.ConnMaxLifetime)
+	// Configure connection pool (some settings ignored by sqlite driver)
+	if !cfg.IsSQLite() {
+		sqlDB.SetMaxOpenConns(cfg.Database.MaxOpenConns)
+		sqlDB.SetMaxIdleConns(cfg.Database.MaxIdleConns)
+		sqlDB.SetConnMaxLifetime(cfg.Database.ConnMaxLifetime)
+	}
 
 	// Test connection
 	if err := sqlDB.Ping(); err != nil {
@@ -69,7 +88,11 @@ func New(cfg *config.Config) (*Database, error) {
 		config: &cfg.Database,
 	}
 
-	log.Printf("Successfully connected to PostgreSQL database: %s", cfg.Database.Name)
+	if cfg.IsSQLite() {
+		log.Printf("Successfully connected to SQLite database: %s", cfg.Database.SQLitePath)
+	} else {
+		log.Printf("Successfully connected to PostgreSQL database: %s", cfg.Database.Name)
+	}
 	return database, nil
 }
 
@@ -77,9 +100,11 @@ func New(cfg *config.Config) (*Database, error) {
 func (d *Database) AutoMigrate() error {
 	log.Println("Running database auto-migration...")
 
-	// First, check if we need to migrate from old schema to new schema
-	if err := d.migrateFromOldSchema(); err != nil {
-		log.Printf("Warning: failed to migrate from old schema: %v", err)
+	// First, check if we need to migrate from old schema to new schema (PostgreSQL-only)
+	if d.config.Driver == "postgres" || d.config.Driver == "Postgres" || d.config.Driver == "POSTGRES" {
+		if err := d.migrateFromOldSchema(); err != nil {
+			log.Printf("Warning: failed to migrate from old schema: %v", err)
+		}
 	}
 
 	// Run auto-migration for all models
@@ -103,18 +128,22 @@ func (d *Database) AutoMigrate() error {
 		return fmt.Errorf("failed to migrate AlertHistory model: %w", err)
 	}
 
-	// Add missing speed columns manually if they don't exist
-	log.Println("Adding missing speed columns...")
-	if err := d.addMissingSpeedColumns(); err != nil {
-		log.Printf("Warning: failed to add missing speed columns: %v", err)
+	// Add missing speed columns manually if they don't exist (PostgreSQL-only)
+	if d.config.Driver == "postgres" || d.config.Driver == "Postgres" || d.config.Driver == "POSTGRES" {
+		log.Println("Adding missing speed columns...")
+		if err := d.addMissingSpeedColumns(); err != nil {
+			log.Printf("Warning: failed to add missing speed columns: %v", err)
+		}
 	}
 
 	log.Println("Database auto-migration completed successfully")
 
-	// Create indexes for better performance
-	if err := d.createIndexes(); err != nil {
-		// Log warning but don't fail the migration
-		log.Printf("Warning: failed to create indexes: %v", err)
+	// Create indexes for better performance (PostgreSQL-only; SQLite has limited support here)
+	if d.config.Driver == "postgres" || d.config.Driver == "Postgres" || d.config.Driver == "POSTGRES" {
+		if err := d.createIndexes(); err != nil {
+			// Log warning but don't fail the migration
+			log.Printf("Warning: failed to create indexes: %v", err)
+		}
 	}
 
 	log.Println("Database initialization completed successfully")

@@ -127,6 +127,7 @@ services:
 
   # NGINX reverse proxy (optional)
   nginx:
+    profiles: ["proxy"]
     image: nginx:alpine
     container_name: godash-nginx
     ports:

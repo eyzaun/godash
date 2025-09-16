@@ -45,6 +45,16 @@ class Dashboard {
             connectionTime: null
         };
 
+        // Scroll guard state to prevent unintended auto-scrolling during updates
+        this.scrollGuard = {
+            enabled: true,
+            userInteracted: false,
+            active: false,
+            lastY: 0,
+            relaxTimer: null,
+            relaxMs: 8000
+        };
+
         this.log('Dashboard initialized:', this.options);
     }
 
@@ -65,6 +75,14 @@ class Dashboard {
 
         try {
             this.log('Initializing Dashboard...');
+
+            // Detect Edge app/kiosk mode and disable chart animations to avoid layout jitter
+            const isEdge = navigator.userAgent && navigator.userAgent.includes('Edg/');
+            const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || false;
+            if (isEdge || isStandalone) {
+                this.options.chartUpdateAnimation = false;
+                try { document.body.classList.add('edge-app-mode'); } catch (e) {}
+            }
 
             this.cacheElements();
             this.initializeQuickStats();
@@ -342,6 +360,25 @@ class Dashboard {
             }
         });
 
+        // Track scroll position and user interaction to avoid forced scroll locking while user scrolls
+        window.addEventListener('scroll', () => {
+            if (!this.scrollGuard) return;
+            this.scrollGuard.lastY = window.scrollY || window.pageYOffset || 0;
+        }, { passive: true });
+
+        const markUserInteracted = () => {
+            if (!this.scrollGuard) return;
+            this.scrollGuard.userInteracted = true;
+            if (this.scrollGuard.relaxTimer) clearTimeout(this.scrollGuard.relaxTimer);
+            // After a short idle period, allow scroll guard again
+            this.scrollGuard.relaxTimer = setTimeout(() => {
+                this.scrollGuard.userInteracted = false;
+            }, this.scrollGuard.relaxMs);
+        };
+        ['wheel','touchstart','touchmove','keydown','mousedown'].forEach(evt => {
+            window.addEventListener(evt, markUserInteracted, { passive: true });
+        });
+
         this.log('Event listeners setup complete');
     }
 
@@ -421,6 +458,9 @@ class Dashboard {
     handleMetricsUpdate(data) {
         if (!data) return;
 
+        // Prevent unintended auto-scroll during bulk DOM/chart updates (unless user is actively interacting)
+        this.freezeScrollStart();
+
         this.stats.totalUpdates++;
         this.lastUpdateTime = new Date();
 
@@ -439,6 +479,8 @@ class Dashboard {
         if (data.client_count !== undefined) {
             this.updateElementText(this.elements.clientCount, data.client_count.toString());
         }
+        // Release scroll lock and restore prior position if it drifted
+        this.freezeScrollEnd();
     }
 
     /**
@@ -477,16 +519,30 @@ class Dashboard {
                 this.updateElementText(this.elements.networkDownload, metrics.network_download_speed_mbps.toFixed(1));
             }
 
-            // Temperature
-            const temperature = metrics.cpu_temperature_c || metrics.simulated_temperature || 45;
-            this.updateElementText(this.elements.temperatureValue, temperature.toFixed(1));
-            this.updateElementText(this.elements.currentTemp, `${temperature.toFixed(1)}°C`);
+            // Temperature: prefer real metric; if not available, show N/A
+            let temperature = undefined;
+            if (typeof metrics.cpu_temperature_c === 'number' && isFinite(metrics.cpu_temperature_c) && metrics.cpu_temperature_c > 0) {
+                temperature = metrics.cpu_temperature_c;
+            } else if (typeof metrics.simulated_temperature === 'number' && isFinite(metrics.simulated_temperature) && metrics.simulated_temperature > 0) {
+                temperature = metrics.simulated_temperature;
+            }
+
+            if (temperature !== undefined) {
+                this.updateElementText(this.elements.temperatureValue, temperature.toFixed(1));
+                this.updateElementText(this.elements.currentTemp, `${temperature.toFixed(1)}°C`);
+            } else {
+                this.updateElementText(this.elements.temperatureValue, 'N/A');
+                this.updateElementText(this.elements.currentTemp, 'N/A');
+            }
             
             // Temperature status
-            let tempStatus = 'Normal';
-            if (temperature > 75) tempStatus = 'Hot';
-            else if (temperature > 65) tempStatus = 'Warm';
-            else if (temperature > 55) tempStatus = 'Moderate';
+            let tempStatus = 'Unknown';
+            if (temperature !== undefined) {
+                tempStatus = 'Normal';
+                if (temperature > 75) tempStatus = 'Hot';
+                else if (temperature > 65) tempStatus = 'Warm';
+                else if (temperature > 55) tempStatus = 'Moderate';
+            }
             this.updateElementText(this.elements.tempStatus, tempStatus);
 
             // Process count - using direct API fields
@@ -904,9 +960,16 @@ class Dashboard {
                 }, 10000);
             }
 
-            // Handle click
+            // Handle click without forcing window focus (which may scroll the page)
             notification.onclick = function() {
-                window.focus();
+                try {
+                    if (document.hasFocus && !document.hasFocus()) {
+                        // Only focus if page is actually in the background
+                        window.focus();
+                    }
+                } catch (e) {
+                    // Ignore focus errors in kiosk/embedded contexts
+                }
                 notification.close();
             };
 
@@ -1087,6 +1150,9 @@ class Dashboard {
      */
     updateDiskList(diskPartitions) {
         this.log('updateDiskList called with:', diskPartitions);
+
+        // Guard scroll around list re-render which may change layout height
+        this.freezeScrollStart();
         
         if (!diskPartitions || !this.elements.diskList) {
             this.log('Missing diskPartitions or diskList element:', {
@@ -1145,6 +1211,8 @@ class Dashboard {
             this.log('Disk list updated successfully');
         } catch (error) {
             this.log('Error updating disk list:', error);
+        } finally {
+            this.freezeScrollEnd();
         }
     }
 
@@ -1197,6 +1265,31 @@ class Dashboard {
     log(...args) {
         if (this.options.debug) {
             console.log('[Dashboard]', ...args);
+        }
+    }
+
+    /**
+     * Scroll guard helpers to keep viewport steady during frequent updates
+     */
+    freezeScrollStart() {
+        try {
+            if (!this.scrollGuard || !this.scrollGuard.enabled || this.scrollGuard.userInteracted || this.scrollGuard.active) return;
+            this.scrollGuard.lastY = window.scrollY || window.pageYOffset || 0;
+            this.scrollGuard.active = true;
+        } catch (e) {}
+    }
+
+    freezeScrollEnd() {
+        try {
+            if (!this.scrollGuard || !this.scrollGuard.active) return;
+            const targetY = this.scrollGuard.lastY || 0;
+            // Restore on next paint to counter any layout shifts
+            requestAnimationFrame(() => {
+                window.scrollTo(0, targetY);
+                this.scrollGuard.active = false;
+            });
+        } catch (e) {
+            this.scrollGuard.active = false;
         }
     }
 }

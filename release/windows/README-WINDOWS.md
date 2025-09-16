@@ -31,15 +31,6 @@ Stop all services:
 
 Access the dashboard at http://localhost:8080/
 
-### Auto-open window and kiosk mode
-- The launcher automatically opens the dashboard in an app-style window using Edge or Chrome.
-- To launch in kiosk (borderless full-screen) mode, set an environment variable before running:
-
-   set APP_KIOSK=1
-   .\run-godash.bat
-
-- If Edge/Chrome aren’t found in standard paths, the default browser is used.
-
 ## CLI Tool
 You can run the CLI without the web server:
 

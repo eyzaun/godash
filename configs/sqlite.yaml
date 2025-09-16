@@ -1,3 +1,27 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+  mode: release
+
+database:
+  driver: sqlite
+  sqlite_path: godash.db
+  log_level: warn
+
+metrics:
+  collection_interval: 5s
+  retention_days: 30
+  enable_cpu: true
+  enable_memory: true
+  enable_disk: true
+  enable_network: true
+  enable_processes: true
+  buffer_size: 100
+
+alerts:
+  enable_alerts: false
+  check_interval: 30s
+  cooldown_period: 5m
 # GoDash Development Configuration with SQLite
 server:
   host: "0.0.0.0"
