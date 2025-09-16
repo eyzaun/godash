@@ -53,3 +53,11 @@ temp/
 
 # Docker volumes
 data/
+
+# Node tooling (not part of this Go repo)
+node_modules/
+package.json
+package-lock.json
+
+# Release artifacts (built locally)
+release/
