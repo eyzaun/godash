@@ -61,3 +61,14 @@ package-lock.json
 
 # Release artifacts (built locally)
 release/
+
+# Local databases and caches
+*.db
+
+# PowerShell helper scripts (local only)
+*.ps1
+
+# Experimental/legacy
+frontend/
+svg-demo/
+wails.json
