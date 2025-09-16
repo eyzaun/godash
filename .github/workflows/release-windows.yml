@@ -36,10 +36,10 @@ jobs:
             }
           }
           if ([string]::IsNullOrWhiteSpace($tag)) {
-            Write-Error "TAG not provided and not running on a tag."
+            Write-Error "tag not provided and not running on a tag."
             exit 1
           }
-          Write-Host "Resolved TAG=$tag"
+          Write-Host "Resolved tag=$tag"
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Cache Go build
