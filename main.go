@@ -199,8 +199,9 @@ func (app *Application) run(ctx context.Context) error {
 			time.Sleep(1200 * time.Millisecond)
 			url := fmt.Sprintf("http://%s/", app.config.GetServerAddress())
 
-			// If Windows, prefer Edge/Chrome app window to avoid opening a regular tab.
-			if runtime.GOOS == "windows" {
+			switch runtime.GOOS {
+			case "windows":
+				// Prefer Edge/Chrome app window to avoid opening a regular tab.
 				browsers := []string{
 					os.Getenv("ProgramFiles") + "\\Microsoft\\Edge\\Application\\msedge.exe",
 					os.Getenv("ProgramFiles(x86)") + "\\Microsoft\\Edge\\Application\\msedge.exe",
@@ -222,18 +223,16 @@ func (app *Application) run(ctx context.Context) error {
 						return
 					}
 				}
-
 				// Fallback to default browser if no known browser path found
 				_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-				return
-			}
-
-			// Non-Windows: open default browser (best-effort)
-			// macOS: open, Linux: xdg-open
-			if runtime.GOOS == "darwin" {
+			case "darwin":
+				// macOS
 				_ = exec.Command("open", url).Start()
-			} else if runtime.GOOS == "linux" {
+			case "linux":
+				// Linux
 				_ = exec.Command("xdg-open", url).Start()
+			default:
+				// Unknown OS: no-op
 			}
 		}()
 	}
