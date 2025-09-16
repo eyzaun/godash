@@ -57,7 +57,7 @@ build: clean
 	@echo "$(BLUE)Building $(APP_NAME) v$(VERSION) for $(GOOS)/$(GOARCH)...$(NC)"
 	@mkdir -p build
 	@go build $(LDFLAGS) -o build/$(APP_NAME) .
-	@go build $(LDFLAGS) -o build/$(APP_NAME)-cli ./cmd/cli
+	@go build $(LDFLAGS) -o build/$(APP_NAME)-cli ./cmd/godash-cli
 	@echo "$(GREEN)✓ Build completed successfully$(NC)"
 	@ls -la build/
 

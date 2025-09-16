@@ -1,0 +1,77 @@
+name: Release Windows Asset
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g., v0.9.0)"
+        required: true
+        type: string
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\go\pkg\mod
+            ~\AppData\Local\go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Build Windows EXE
+        shell: pwsh
+        run: |
+          go env
+          go build -o build\godash.exe .
+
+      - name: Create README for ZIP
+        shell: pwsh
+        run: |
+          $content = @"
+          GoDash ${env:TAG} (Windows)
+
+          1) Unzip
+          2) Run godash.exe
+          3) Open http://127.0.0.1:8080/ if the browser doesn't auto-open
+
+          Notes:
+          - Uses SQLite by default
+          - Set APP_KIOSK=1 to open in kiosk/app window (Windows)
+          "@
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Set-Content -Path release\README-WINDOWS.txt -Value $content -Encoding UTF8
+
+      - name: Package ZIP
+        shell: pwsh
+        run: |
+          $zip = "godash-${env:TAG}-windows-x64.zip"
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path build\godash.exe, release\README-WINDOWS.txt -DestinationPath $zip
+          Write-Host "Created $zip"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: |
+            godash-${{ env.TAG }}-windows-x64.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
