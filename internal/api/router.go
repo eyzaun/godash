@@ -127,6 +127,12 @@ func (r *Router) setupMiddleware() {
 
 	// API versioning middleware
 	r.engine.Use(middleware.APIVersion())
+
+	// Global error handler
+	r.engine.Use(middleware.ErrorHandler())
+
+	// Enforce JSON content-type for mutating HTTP methods
+	r.engine.Use(middleware.JSONContentType())
 }
 
 // setupRoutes configures all API routes
@@ -182,6 +188,11 @@ func (r *Router) setupRoutes() {
 			systemGroup.GET("/status", r.metricsHandler.GetSystemStatus)
 			systemGroup.GET("/hosts", r.metricsHandler.GetHosts)
 			systemGroup.GET("/stats", r.metricsHandler.GetStats)
+			// Collector service statistics
+			systemGroup.GET("/collector-stats", func(c *gin.Context) {
+				stats := r.collectorService.GetStats()
+				c.JSON(http.StatusOK, handlers.APIResponse{Success: true, Data: stats})
+			})
 		}
 
 		// WebSocket routes

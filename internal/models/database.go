@@ -296,11 +296,4 @@ type SystemStatus struct {
 }
 
 // GetAllModels returns all models for auto-migration
-func GetAllModels() []interface{} {
-	return []interface{}{
-		&Metric{},
-		&DBSystemInfo{},
-		&Alert{},
-		&AlertHistory{},
-	}
-}
+// Note: Removed unused GetAllModels helper.

@@ -1,9 +1,6 @@
 package middleware
 
 import (
-	"context"
-	"crypto/subtle"
-	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -253,39 +250,7 @@ func ErrorHandler() gin.HandlerFunc {
 }
 
 // Timeout middleware for handling request timeouts
-func Timeout(timeout time.Duration) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Wrap the request with a timeout context
-		ctx := c.Request.Context()
-		timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-
-		// Replace request context
-		c.Request = c.Request.WithContext(timeoutCtx)
-
-		// Channel to signal completion
-		finished := make(chan struct{})
-
-		go func() {
-			c.Next()
-			finished <- struct{}{}
-		}()
-
-		select {
-		case <-finished:
-			// Request completed within timeout
-			return
-		case <-timeoutCtx.Done():
-			// Request timed out
-			c.JSON(http.StatusRequestTimeout, gin.H{
-				"error":   "Request Timeout",
-				"message": fmt.Sprintf("Request timed out after %v", timeout),
-			})
-			c.Abort()
-			return
-		}
-	}
-}
+// Note: Timeout middleware removed as it's currently unused; add back if needed.
 
 // JSONContentType middleware ensures content type is application/json for POST/PUT requests
 func JSONContentType() gin.HandlerFunc {
@@ -306,29 +271,4 @@ func JSONContentType() gin.HandlerFunc {
 }
 
 // ValidateAPIKey middleware for API key validation (if needed)
-func ValidateAPIKey(validAPIKey string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		apiKey := c.GetHeader("X-API-Key")
-
-		if apiKey == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error":   "Unauthorized",
-				"message": "API key is required",
-			})
-			c.Abort()
-			return
-		}
-
-		// Use constant time comparison to prevent timing attacks
-		if subtle.ConstantTimeCompare([]byte(apiKey), []byte(validAPIKey)) != 1 {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error":   "Unauthorized",
-				"message": "Invalid API key",
-			})
-			c.Abort()
-			return
-		}
-
-		c.Next()
-	}
-}
+// Note: ValidateAPIKey middleware removed as it's currently unused; add back if needed.

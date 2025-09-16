@@ -1,10 +1,8 @@
 package database
 
 import (
-	"context"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
@@ -316,44 +314,6 @@ func (d *Database) createIndexes() error {
 }
 
 // HealthCheck checks database connection health
-func (d *Database) HealthCheck() error {
-	sqlDB, err := d.DB.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get underlying sql.DB: %w", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := sqlDB.PingContext(ctx); err != nil {
-		return fmt.Errorf("database ping failed: %w", err)
-	}
-
-	return nil
-}
-
-// GetStats returns database connection statistics
-func (d *Database) GetStats() map[string]interface{} {
-	sqlDB, err := d.DB.DB()
-	if err != nil {
-		return map[string]interface{}{
-			"error": err.Error(),
-		}
-	}
-
-	stats := sqlDB.Stats()
-	return map[string]interface{}{
-		"max_open_connections": stats.MaxOpenConnections,
-		"open_connections":     stats.OpenConnections,
-		"in_use":               stats.InUse,
-		"idle":                 stats.Idle,
-		"wait_count":           stats.WaitCount,
-		"wait_duration":        stats.WaitDuration,
-		"max_idle_closed":      stats.MaxIdleClosed,
-		"max_lifetime_closed":  stats.MaxLifetimeClosed,
-	}
-}
-
 // Close closes the database connection
 func (d *Database) Close() error {
 	sqlDB, err := d.DB.DB()
@@ -396,25 +356,4 @@ func (d *Database) addMissingSpeedColumns() error {
 }
 
 // CleanupOldMetrics removes old metrics based on retention policy
-func (d *Database) CleanupOldMetrics(retentionDays int) error {
-	cutoffTime := time.Now().AddDate(0, 0, -retentionDays)
-
-	result := d.DB.Where("created_at < ?", cutoffTime).Delete(&models.Metric{})
-	if result.Error != nil {
-		return fmt.Errorf("failed to cleanup old metrics: %w", result.Error)
-	}
-
-	if result.RowsAffected > 0 {
-		log.Printf("Cleaned up %d old metric records older than %d days",
-			result.RowsAffected, retentionDays)
-	}
-
-	return nil
-}
-
-// GetMetricsCount returns total count of metrics in database
-func (d *Database) GetMetricsCount() (int64, error) {
-	var count int64
-	err := d.DB.Model(&models.Metric{}).Count(&count).Error
-	return count, err
-}
+// Note: Removed unused health/stats helper functions to keep API surface minimal.

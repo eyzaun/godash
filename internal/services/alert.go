@@ -11,6 +11,8 @@ import (
 	"github.com/eyzaun/godash/internal/config"
 	"github.com/eyzaun/godash/internal/models"
 	"github.com/eyzaun/godash/internal/repository"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // AlertService manages alert checking and notifications
@@ -368,8 +370,10 @@ func (as *AlertService) generateAlertMessage(alert *models.Alert, value float64,
 		unit = "%"
 	}
 
+	// Title-case metric type in a Unicode-aware way
+	title := cases.Title(language.Und).String(strings.ToLower(alert.MetricType))
 	return fmt.Sprintf("%s %s %.2f%s (threshold: %.2f%s) on %s",
-		strings.Title(strings.ToLower(alert.MetricType)),
+		title,
 		alert.Condition,
 		value, unit,
 		alert.Threshold, unit,
