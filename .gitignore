@@ -65,8 +65,8 @@ release/
 # Local databases and caches
 *.db
 
-# PowerShell helper scripts (local only)
-*.ps1
+# Analysis reports (local only)
+reports/
 
 # Experimental/legacy
 frontend/

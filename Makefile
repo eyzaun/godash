@@ -324,18 +324,4 @@ ifeq ($(GOOS),windows)
 include Makefile.windows
 endif
 
-# --- Local analysis helpers ---
-.PHONY: analyze-unused clean-unused
-
-analyze-unused:
-	@echo "$(BLUE)Analyzing unused/dead code...$(NC)"
-	@staticcheck ./... || true
-	@ineffassign ./... || true
-	@unused ./... || true
-	@deadcode -test ./... || true
-
-clean-unused:
-	@echo "$(BLUE)Cleaning imports/format/tidy...$(NC)"
-	@goimports -w .
-	@gofumpt -w .
-	@go mod tidy
+# (local analysis helpers removed)
