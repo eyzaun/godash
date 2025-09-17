@@ -479,56 +479,58 @@ func (r *metricsRepository) GetUsageTrends(hostname string, hours int) ([]*model
 
 	since := time.Now().Add(-time.Duration(hours) * time.Hour)
 
-	// Portable fallback: group by hour using strftime for SQLite and date_trunc for Postgres
-	// Try Postgres first; if it fails at runtime, caller will see the error. For cross-DB, consider splitting by dialect.
-	err := r.db.Model(&models.Metric{}).
-		Select(`DATE_TRUNC('hour', timestamp) as hour,
-			AVG(cpu_usage) as avg_cpu_usage,
-			AVG(memory_percent) as avg_memory_usage,
-			AVG(disk_percent) as avg_disk_usage,
-			COUNT(*) as sample_count`).
-		Where("hostname = ? AND timestamp >= ?", hostname, since).
-		Group("DATE_TRUNC('hour', timestamp)").
-		Order("hour DESC").
-		Scan(&trends).Error
-
-	if err != nil {
-		// Attempt SQLite variant using strftime
-		type row struct {
-			HourStr        string  `gorm:"column:hour"`
-			AvgCPUUsage    float64 `gorm:"column:avg_cpu_usage"`
-			AvgMemoryUsage float64 `gorm:"column:avg_memory_usage"`
-			AvgDiskUsage   float64 `gorm:"column:avg_disk_usage"`
-			SampleCount    int64   `gorm:"column:sample_count"`
-		}
-		var rows []row
-		if err2 := r.db.Model(&models.Metric{}).
-			Select(`strftime('%Y-%m-%dT%H:00:00Z', timestamp) as hour,
+	// Determine dialect via gorm's config
+	dialector := r.db.Dialector.Name()
+	if dialector == "postgres" {
+		// PostgreSQL version using DATE_TRUNC
+		err := r.db.Model(&models.Metric{}).
+			Select(`DATE_TRUNC('hour', timestamp) as hour,
 				AVG(cpu_usage) as avg_cpu_usage,
 				AVG(memory_percent) as avg_memory_usage,
 				AVG(disk_percent) as avg_disk_usage,
 				COUNT(*) as sample_count`).
 			Where("hostname = ? AND timestamp >= ?", hostname, since).
-			Group("strftime('%Y-%m-%dT%H:00:00Z', timestamp)").
+			Group("DATE_TRUNC('hour', timestamp)").
 			Order("hour DESC").
-			Scan(&rows).Error; err2 != nil {
+			Scan(&trends).Error
+		if err != nil {
 			return nil, fmt.Errorf("failed to get usage trends: %w", err)
-		}
-		// Map to trends with parsed time
-		trends = make([]*models.UsageTrend, 0, len(rows))
-		for _, rrow := range rows {
-			t, _ := time.Parse(time.RFC3339, rrow.HourStr)
-			trends = append(trends, &models.UsageTrend{
-				Hour:           t,
-				AvgCPUUsage:    rrow.AvgCPUUsage,
-				AvgMemoryUsage: rrow.AvgMemoryUsage,
-				AvgDiskUsage:   rrow.AvgDiskUsage,
-				SampleCount:    rrow.SampleCount,
-			})
 		}
 		return trends, nil
 	}
 
+	// SQLite (and others) version using strftime
+	type row struct {
+		HourStr        string  `gorm:"column:hour"`
+		AvgCPUUsage    float64 `gorm:"column:avg_cpu_usage"`
+		AvgMemoryUsage float64 `gorm:"column:avg_memory_usage"`
+		AvgDiskUsage   float64 `gorm:"column:avg_disk_usage"`
+		SampleCount    int64   `gorm:"column:sample_count"`
+	}
+	var rows []row
+	if err := r.db.Model(&models.Metric{}).
+		Select(`strftime('%Y-%m-%dT%H:00:00Z', timestamp) as hour,
+			AVG(cpu_usage) as avg_cpu_usage,
+			AVG(memory_percent) as avg_memory_usage,
+			AVG(disk_percent) as avg_disk_usage,
+			COUNT(*) as sample_count`).
+		Where("hostname = ? AND timestamp >= ?", hostname, since).
+		Group("strftime('%Y-%m-%dT%H:00:00Z', timestamp)").
+		Order("hour DESC").
+		Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("failed to get usage trends: %w", err)
+	}
+	trends = make([]*models.UsageTrend, 0, len(rows))
+	for _, rrow := range rows {
+		t, _ := time.Parse(time.RFC3339, rrow.HourStr)
+		trends = append(trends, &models.UsageTrend{
+			Hour:           t,
+			AvgCPUUsage:    rrow.AvgCPUUsage,
+			AvgMemoryUsage: rrow.AvgMemoryUsage,
+			AvgDiskUsage:   rrow.AvgDiskUsage,
+			SampleCount:    rrow.SampleCount,
+		})
+	}
 	return trends, nil
 }
 
@@ -565,24 +567,28 @@ func (r *metricsRepository) GetCountByDateRange(from, to time.Time) (int64, erro
 func (r *metricsRepository) GetSystemStatus() ([]*models.SystemStatus, error) {
 	var status []*models.SystemStatus
 
-	// Try PostgreSQL DISTINCT ON; if error, fallback to a portable approach
-	err := r.db.Raw(`
-		SELECT DISTINCT ON (hostname)
-			hostname,
-			cpu_usage,
-			memory_percent,
-			disk_percent,
-			timestamp,
-			CASE
-				WHEN timestamp > NOW() - INTERVAL '5 minutes' THEN 'online'
-				WHEN timestamp > NOW() - INTERVAL '15 minutes' THEN 'warning'
-				ELSE 'offline'
-			END as status
-		FROM metrics
-		ORDER BY hostname, timestamp DESC
-	`).Scan(&status).Error
-	if err != nil {
-		// Portable fallback: get latest record per host using subquery
+	// Dialect-aware implementation
+	if r.db.Dialector.Name() == "postgres" {
+		// PostgreSQL DISTINCT ON for efficiency
+		if err := r.db.Raw(`
+			SELECT DISTINCT ON (hostname)
+				hostname,
+				cpu_usage,
+				memory_percent,
+				disk_percent,
+				timestamp,
+				CASE
+					WHEN timestamp > NOW() - INTERVAL '5 minutes' THEN 'online'
+					WHEN timestamp > NOW() - INTERVAL '15 minutes' THEN 'warning'
+					ELSE 'offline'
+				END as status
+			FROM metrics
+			ORDER BY hostname, timestamp DESC
+		`).Scan(&status).Error; err != nil {
+			return nil, fmt.Errorf("failed to get system status: %w", err)
+		}
+	} else {
+		// Portable approach for SQLite and others: join on latest timestamp per host
 		type row struct {
 			Hostname      string    `gorm:"column:hostname"`
 			CPUUsage      float64   `gorm:"column:cpu_usage"`
@@ -591,18 +597,15 @@ func (r *metricsRepository) GetSystemStatus() ([]*models.SystemStatus, error) {
 			Timestamp     time.Time `gorm:"column:timestamp"`
 		}
 		var rows []row
-		// For SQLite/Postgres portability, use a window function if available; otherwise join on max timestamp
-		// Join on (hostname, max(timestamp))
 		sub := r.db.Model(&models.Metric{}).
 			Select("hostname, MAX(timestamp) as max_ts").
 			Group("hostname")
-		if err2 := r.db.Table("metrics m").
+		if err := r.db.Table("metrics m").
 			Select("m.hostname, m.cpu_usage, m.memory_percent, m.disk_percent, m.timestamp").
 			Joins("JOIN (?) t ON t.hostname = m.hostname AND t.max_ts = m.timestamp", sub).
-			Scan(&rows).Error; err2 != nil {
+			Scan(&rows).Error; err != nil {
 			return nil, fmt.Errorf("failed to get system status: %w", err)
 		}
-		// Map and compute status by recency
 		now := time.Now()
 		status = make([]*models.SystemStatus, 0, len(rows))
 		for _, rr := range rows {

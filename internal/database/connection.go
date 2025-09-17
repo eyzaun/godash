@@ -126,12 +126,10 @@ func (d *Database) AutoMigrate() error {
 		return fmt.Errorf("failed to migrate AlertHistory model: %w", err)
 	}
 
-	// Add missing speed columns manually if they don't exist (PostgreSQL-only)
-	if d.config.Driver == "postgres" || d.config.Driver == "Postgres" || d.config.Driver == "POSTGRES" {
-		log.Println("Adding missing speed columns...")
-		if err := d.addMissingSpeedColumns(); err != nil {
-			log.Printf("Warning: failed to add missing speed columns: %v", err)
-		}
+	// Add missing speed columns manually if they don't exist (both drivers)
+	log.Println("Adding missing speed columns if needed...")
+	if err := d.addMissingSpeedColumns(); err != nil {
+		log.Printf("Warning: failed to add missing speed columns: %v", err)
 	}
 
 	log.Println("Database auto-migration completed successfully")
@@ -333,23 +331,29 @@ func (d *Database) Close() error {
 func (d *Database) addMissingSpeedColumns() error {
 	log.Println("Checking and adding missing speed columns...")
 
-	// Add disk speed columns
-	if err := d.DB.Exec(`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_read_speed_mbps DOUBLE PRECISION DEFAULT 0`).Error; err != nil {
-		log.Printf("Warning: failed to add disk_read_speed_mbps column: %v", err)
+	// Determine dialect and types
+	driver := d.config.Driver
+	isPostgres := driver == "postgres" || driver == "Postgres" || driver == "POSTGRES"
+	// SQLite doesn't support DOUBLE PRECISION keyword; use REAL
+	floatType := "REAL"
+	if isPostgres {
+		floatType = "DOUBLE PRECISION"
 	}
 
-	if err := d.DB.Exec(`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS disk_write_speed_mbps DOUBLE PRECISION DEFAULT 0`).Error; err != nil {
-		log.Printf("Warning: failed to add disk_write_speed_mbps column: %v", err)
+	// Helper: add column if missing
+	addCol := func(name, colType string) {
+		if err := d.DB.Exec(fmt.Sprintf("ALTER TABLE metrics ADD COLUMN IF NOT EXISTS %s %s DEFAULT 0", name, colType)).Error; err != nil {
+			log.Printf("Warning: failed to add %s column: %v", name, err)
+		}
 	}
+
+	// Add disk speed columns
+	addCol("disk_read_speed_mbps", floatType)
+	addCol("disk_write_speed_mbps", floatType)
 
 	// Add network speed columns
-	if err := d.DB.Exec(`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_upload_speed_mbps DOUBLE PRECISION DEFAULT 0`).Error; err != nil {
-		log.Printf("Warning: failed to add network_upload_speed_mbps column: %v", err)
-	}
-
-	if err := d.DB.Exec(`ALTER TABLE metrics ADD COLUMN IF NOT EXISTS network_download_speed_mbps DOUBLE PRECISION DEFAULT 0`).Error; err != nil {
-		log.Printf("Warning: failed to add network_download_speed_mbps column: %v", err)
-	}
+	addCol("network_upload_speed_mbps", floatType)
+	addCol("network_download_speed_mbps", floatType)
 
 	log.Println("✅ Speed columns check completed")
 	return nil

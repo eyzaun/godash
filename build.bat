@@ -14,6 +14,13 @@ go mod tidy
 
 REM Build main application
 echo Building main application...
+REM Generate Windows icon/version resource
+echo Embedding Windows icon/version resource...
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\embed-icon.ps1 -VersionInfo versioninfo.json -Icon web\static\favicon.ico
+if %ERRORLEVEL% neq 0 (
+    echo Warning: Failed to embed icon/version resource. Continuing build without custom icon.
+)
+
 go build -o build\godash.exe .
 if %ERRORLEVEL% neq 0 (
     echo Error: Failed to build main application
@@ -22,7 +29,7 @@ if %ERRORLEVEL% neq 0 (
 
 REM Build CLI application
 echo Building CLI application...
-go build -o build\godash-cli.exe .\cmd\cli
+go build -o build\godash-cli.exe .\cmd\godash-cli
 if %ERRORLEVEL% neq 0 (
     echo Error: Failed to build CLI application
     exit /b 1

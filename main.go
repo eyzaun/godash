@@ -23,7 +23,7 @@ import (
 
 const (
 	AppName    = "GoDash"
-	AppVersion = "1.1.1"
+	AppVersion = "1.1.2"
 )
 
 // Application holds all application dependencies

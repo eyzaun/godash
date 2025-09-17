@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="256" height="256"><svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="120" fill="#1e293b" stroke="#334155" stroke-width="4"></circle>
+  
+  <!-- Dashboard/Speedometer base -->
+  <circle cx="128" cy="128" r="85" fill="none" stroke="#64748b" stroke-width="2"></circle>
+  <circle cx="128" cy="128" r="65" fill="none" stroke="#94a3b8" stroke-width="1" stroke-dasharray="5,3"></circle>
+  
+  <!-- Chart elements representing monitoring -->
+  <!-- CPU line chart -->
+  <path d="M 60 160 Q 80 140 100 150 Q 120 130 140 145 Q 160 125 180 140 Q 200 120 220 135" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round"></path>
+  
+  <!-- Memory bars -->
+  <rect x="70" y="180" width="8" height="25" fill="#3b82f6" rx="2"></rect>
+  <rect x="82" y="170" width="8" height="35" fill="#3b82f6" rx="2"></rect>
+  <rect x="94" y="175" width="8" height="30" fill="#3b82f6" rx="2"></rect>
+  <rect x="106" y="165" width="8" height="40" fill="#3b82f6" rx="2"></rect>
+  
+  <!-- Network activity indicators -->
+  <rect x="140" y="180" width="8" height="20" fill="#f59e0b" rx="2"></rect>
+  <rect x="152" y="175" width="8" height="25" fill="#f59e0b" rx="2"></rect>
+  <rect x="164" y="170" width="8" height="30" fill="#f59e0b" rx="2"></rect>
+  <rect x="176" y="185" width="8" height="15" fill="#f59e0b" rx="2"></rect>
+  
+  <!-- Center indicator/needle -->
+  <circle cx="128" cy="128" r="8" fill="#ef4444"></circle>
+  <line x1="128" y1="128" x2="165" y2="95" stroke="#ef4444" stroke-width="4" stroke-linecap="round"></line>
+  
+  <!-- Alert indicators -->
+  <circle cx="200" cy="80" r="12" fill="#ef4444"></circle>
+  <circle cx="200" cy="80" r="12" fill="#ef4444" opacity="0.3">
+    <animate attributeName="r" values="12;18;12" dur="2s" repeatCount="indefinite"></animate>
+    <animate attributeName="opacity" values="0.3;0.1;0.3" dur="2s" repeatCount="indefinite"></animate>
+  </circle>
+  <text x="200" y="85" text-anchor="middle" fill="white" font-size="14" font-weight="bold">!</text>
+  
+  <!-- Go logo element -->
+  <g transform="translate(95, 100)">
+    <path d="M 0 0 Q 15 -8 30 0 Q 35 5 30 10 Q 15 18 0 10 Q -5 5 0 0 Z" fill="#00add8" stroke="#00758f" stroke-width="1"></path>
+    <circle cx="22" cy="5" r="2" fill="white"></circle>
+  </g>
+  
+  <!-- Subtitle -->
+  <text x="128" y="235" text-anchor="middle" fill="#94a3b8" font-size="16" font-family="Arial, sans-serif" font-weight="500">
+    GoDash
+  </text>
+</svg><style>@media (prefers-color-scheme: light) { :root { filter: none; } }
+@media (prefers-color-scheme: dark) { :root { filter: none; } }
+</style></svg>

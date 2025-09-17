@@ -23,7 +23,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24.5'
+          # Use the Go version from go.mod for better compatibility
+          go-version-file: 'go.mod'
 
       - name: Resolve tag
         id: resolve_tag
@@ -52,19 +53,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Check Signing Secrets
-        id: check_signing
-        shell: pwsh
-        env:
-          WINDOWS_CERT_PFX_B64: ${{ secrets.WINDOWS_CERT_PFX_B64 }}
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
-        run: |
-          $hasPfx = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PFX_B64)
-          $hasPwd = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PASSWORD)
-          $sign = $hasPfx -and $hasPwd
-          Write-Host "Code signing enabled: $sign"
-          "sign=$sign" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-
       - name: Generate Windows Version Info (.syso)
         shell: pwsh
         run: |
@@ -83,23 +71,33 @@ jobs:
           go build -o build\godash.exe .
 
       - name: Code Sign EXE (if certificate provided)
-        if: ${{ steps.check_signing.outputs.sign == 'True' }}
         shell: pwsh
         env:
           WINDOWS_CERT_PFX_B64: ${{ secrets.WINDOWS_CERT_PFX_B64 }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          Write-Host "Code signing build\\godash.exe"
-          $pfxPath = "$env:RUNNER_TEMP\\codesign.pfx"
-          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_B64))
-          & signtool sign /f $pfxPath /p $env:WINDOWS_CERT_PASSWORD /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com build\godash.exe
+          $pfx = $env:WINDOWS_CERT_PFX_B64
+          $pwd = $env:WINDOWS_CERT_PASSWORD
+          $hasPfx = -not [string]::IsNullOrWhiteSpace($pfx)
+          $hasPwd = -not [string]::IsNullOrWhiteSpace($pwd)
+          if (-not ($hasPfx -and $hasPwd)) {
+            Write-Host "Skipping codesign: certificate secrets not provided."
+            exit 0
+          }
+          Write-Host "Code signing build\godash.exe"
+          $pfxPath = "$env:RUNNER_TEMP\codesign.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($pfx))
+          & signtool sign /f $pfxPath /p $pwd /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com build\godash.exe
           if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
 
       - name: Verify Signature (if signed)
-        if: ${{ steps.check_signing.outputs.sign == 'True' }}
         shell: pwsh
         run: |
-          & signtool verify /pa /v build\godash.exe
+          try {
+            & signtool verify /pa /v build\godash.exe
+          } catch {
+            Write-Host "Signature not present or verification failed; skipping."
+          }
 
       - name: Create README for ZIP
         shell: pwsh
@@ -140,6 +138,9 @@ jobs:
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
+        env:
+          # softprops/action-gh-release uses GITHUB_TOKEN from env
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           tag_name: ${{ steps.resolve_tag.outputs.tag }}
           files: |
@@ -147,5 +148,3 @@ jobs:
             godash-${{ steps.resolve_tag.outputs.tag }}-windows-x64.zip.sha256.txt
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

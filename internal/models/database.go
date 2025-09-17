@@ -49,8 +49,8 @@ type Metric struct {
 	DiskReadOps    uint64  `json:"disk_read_ops"`
 	DiskWriteOps   uint64  `json:"disk_write_ops"`
 	// Disk I/O Speed fields
-	DiskReadSpeed  float64 `json:"disk_read_speed_mbps"`  // MB/s
-	DiskWriteSpeed float64 `json:"disk_write_speed_mbps"` // MB/s
+	DiskReadSpeed  float64 `json:"disk_read_speed_mbps" gorm:"column:disk_read_speed_mbps"`   // MB/s
+	DiskWriteSpeed float64 `json:"disk_write_speed_mbps" gorm:"column:disk_write_speed_mbps"` // MB/s
 
 	// Network metrics - DETAILED (SPEED FIELDS ADDED)
 	NetworkTotalSent     uint64 `json:"network_total_sent_bytes"`
@@ -60,8 +60,8 @@ type Metric struct {
 	NetworkErrors        uint64 `json:"network_errors"`
 	NetworkDrops         uint64 `json:"network_drops"`
 	// Network Speed fields
-	NetworkUploadSpeed   float64 `json:"network_upload_speed_mbps"`   // Mbps
-	NetworkDownloadSpeed float64 `json:"network_download_speed_mbps"` // Mbps
+	NetworkUploadSpeed   float64 `json:"network_upload_speed_mbps" gorm:"column:network_upload_speed_mbps"`     // Mbps
+	NetworkDownloadSpeed float64 `json:"network_download_speed_mbps" gorm:"column:network_download_speed_mbps"` // Mbps
 
 	// System info
 	Platform        string        `json:"platform"`

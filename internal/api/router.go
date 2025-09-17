@@ -145,6 +145,21 @@ func (r *Router) setupRoutes() {
 	// WebSocket endpoint for real-time metrics
 	r.engine.GET("/ws", r.websocketHandler.HandleWebSocket)
 
+	// Favicon route to ensure tab/window icon shows up at /favicon.ico
+	r.engine.GET("/favicon.ico", func(c *gin.Context) {
+		if r.staticFS != nil {
+			file, err := r.staticFS.Open("favicon.ico")
+			if err == nil {
+				defer file.Close()
+				// Serve directly from embedded FS
+				c.FileFromFS("favicon.ico", http.FS(r.staticFS))
+				return
+			}
+		}
+		// Disk fallback
+		c.File("web/static/favicon.ico")
+	})
+
 	// API v1 routes
 	v1 := r.engine.Group("/api/v1")
 	{

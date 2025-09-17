@@ -37,6 +37,7 @@ Thumbs.db
 # Project specific executables (keep build/ dir but ignore executables)
 build/*.exe
 godash-*.exe
+resource.syso
 
 # Logs and databases
 *.log
