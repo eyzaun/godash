@@ -4,7 +4,7 @@ Real-time system monitoring dashboard for Windows/Linux/macOS. Single-EXE on Win
 
 ## Download (Windows)
 
-- Direct: https://github.com/eyzaun/godash/releases/download/v1.1.2/godash-v1.1.2-windows-x64.zip
+- Direct: https://github.com/eyzaun/godash/releases/download/v1.1.3/godash-v1.1.3-windows-x64.zip
 - All releases: https://github.com/eyzaun/godash/releases
 
 After download: unzip and run `godash.exe`. The dashboard opens at http://127.0.0.1:8080/

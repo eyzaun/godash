@@ -22,13 +22,13 @@
     "Comments": "GoDash system monitor for Windows",
     "CompanyName": "GoDash Project",
     "FileDescription": "GoDash - System Monitoring Dashboard",
-  "FileVersion": "1.1.2.0",
+  "FileVersion": "1.1.3.0",
     "InternalName": "godash.exe",
     "LegalCopyright": "Copyright (c) 2025 GoDash Project",
     "LegalTrademarks": "",
     "OriginalFilename": "godash.exe",
     "ProductName": "GoDash",
-  "ProductVersion": "1.1.2.0"
+  "ProductVersion": "1.1.3.0"
   },
   "VarFileInfo": {
     "Translation": {
