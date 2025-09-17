@@ -62,7 +62,25 @@ jobs:
           $ver = $tag.TrimStart('v')
           # Ensure four-part version (x.y.z.w)
           if (($ver.Split('.').Length) -lt 4) { $ver = $ver + ".0" }
-          goversioninfo -platform-specific=true -ver $ver
+          $jsonPath = "versioninfo.json"
+          if (Test-Path $jsonPath) {
+            $json = Get-Content $jsonPath -Raw | ConvertFrom-Json
+            $parts = $ver.Split('.')
+            $json.FixedFileInfo.FileVersion.Major = [int]$parts[0]
+            $json.FixedFileInfo.FileVersion.Minor = [int]$parts[1]
+            $json.FixedFileInfo.FileVersion.Patch = [int]$parts[2]
+            $json.FixedFileInfo.FileVersion.Build = [int]$parts[3]
+            $json.FixedFileInfo.ProductVersion.Major = [int]$parts[0]
+            $json.FixedFileInfo.ProductVersion.Minor = [int]$parts[1]
+            $json.FixedFileInfo.ProductVersion.Patch = [int]$parts[2]
+            $json.FixedFileInfo.ProductVersion.Build = [int]$parts[3]
+            $json.StringFileInfo.FileVersion = "$ver"
+            $json.StringFileInfo.ProductVersion = "$ver"
+            $json | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 $jsonPath
+            goversioninfo -platform-specific -o resource.syso -manifest= -64 $jsonPath
+          } else {
+            goversioninfo -platform-specific -o resource.syso -manifest= -64 -file-version $ver -product-version $ver
+          }
 
       - name: Build Windows EXE
         shell: pwsh
